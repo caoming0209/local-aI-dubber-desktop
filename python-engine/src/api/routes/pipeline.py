@@ -56,6 +56,17 @@ async def _run_single_pipeline(job_id: str, body: dict) -> None:
                 _pause_flags.pop(job_id, None)
                 return
 
+        # Pre-check: verify lipsync model is ready
+        lipsync_check = model_manager.check_lipsync_model_ready()
+        if not lipsync_check.ok:
+            await emitter.emit("failed", 0, 0, lipsync_check.message,
+                               error={"code": lipsync_check.error_code, "message": lipsync_check.message})
+            job_manager.update_state(job_id, status="failed")
+            await emitter.complete()
+            _cancel_flags.pop(job_id, None)
+            _pause_flags.pop(job_id, None)
+            return
+
         # Step 1: Script optimization
         await _check_cancel(job_id)
         await emitter.emit("script_optimization", 1, 0.1, "文案优化中...")
@@ -71,7 +82,8 @@ async def _run_single_pipeline(job_id: str, body: dict) -> None:
         job_manager.update_state(job_id, current_step="tts", step_index=2, progress=0.3)
 
         voice_params = body.get("voice_params", {})
-        tts_path = tts_engine.synthesize(
+        tts_path = await asyncio.to_thread(
+            tts_engine.synthesize,
             text=script,
             voice_id=body.get("voice_id", ""),
             speed=voice_params.get("speed", 1.0),
@@ -82,7 +94,9 @@ async def _run_single_pipeline(job_id: str, body: dict) -> None:
 
         # Resample to 16kHz for Wav2Lip
         resampled_path = tts_path.replace(".wav", "_16k.wav")
-        video_synthesizer.resample_audio(tts_path, resampled_path, 16000)
+        await asyncio.to_thread(
+            video_synthesizer.resample_audio, tts_path, resampled_path, 16000
+        )
 
         # Step 3: Lipsync
         await _check_cancel(job_id)
@@ -90,9 +104,10 @@ async def _run_single_pipeline(job_id: str, body: dict) -> None:
         await emitter.emit("lipsync", 3, 0.5, "口型同步中...")
         job_manager.update_state(job_id, current_step="lipsync", step_index=3, progress=0.5)
 
-        # Get digital human video path (stub: use placeholder)
         dh_video = _get_digital_human_video(body.get("digital_human_id", ""))
-        lipsync_path = lipsync_engine.process(dh_video, resampled_path)
+        lipsync_path = await asyncio.to_thread(
+            lipsync_engine.process, dh_video, resampled_path
+        )
         await emitter.emit("lipsync", 3, 0.7, "口型同步完成")
 
         # Step 4: Video synthesis
@@ -104,7 +119,8 @@ async def _run_single_pipeline(job_id: str, body: dict) -> None:
         output_name = body.get("output_name", f"video_{uuid.uuid4().hex[:6]}")
         output_path = os.path.join(save_dir, f"{output_name}.mp4")
 
-        video_synthesizer.synthesize(
+        await asyncio.to_thread(
+            video_synthesizer.synthesize,
             lipsync_video_path=lipsync_path,
             audio_path=tts_path,
             output_path=output_path,
@@ -118,7 +134,9 @@ async def _run_single_pipeline(job_id: str, body: dict) -> None:
         thumb_dir = os.path.join(save_dir, ".thumbs")
         os.makedirs(thumb_dir, exist_ok=True)
         thumb_path = os.path.join(thumb_dir, f"{output_name}.jpg")
-        video_synthesizer.extract_thumbnail(output_path, thumb_path)
+        await asyncio.to_thread(
+            video_synthesizer.extract_thumbnail, output_path, thumb_path
+        )
 
         # Get duration
         from src.utils.file_utils import get_video_duration, get_file_size
@@ -316,6 +334,7 @@ async def _run_batch_pipeline(job_id: str, body: dict) -> None:
     scripts = body.get("scripts", [])
     shared_config = body.get("shared_config", {})
     output_settings = body.get("output_settings", {})
+    settings = settings_store.read()
     total = len(scripts)
     succeeded = 0
     failed = 0
@@ -338,12 +357,80 @@ async def _run_batch_pipeline(job_id: str, body: dict) -> None:
                     "output_name": f"{output_settings.get('name_prefix', '视频')}_{i+1:03d}",
                 }
 
-                # Run each step with batch progress events
-                for step_name, progress in [("tts", 0.3), ("lipsync", 0.6), ("synthesis", 0.9)]:
-                    await emitter.emit_batch("batch_item_progress", item_index=i, step=step_name, progress=progress)
-                    await asyncio.sleep(0.3)  # Stub delay
+                # TTS
+                await emitter.emit_batch("batch_item_progress", item_index=i, step="tts", progress=0.3)
+                voice_params = single_body.get("voice_params", {})
+                tts_path = await asyncio.to_thread(
+                    tts_engine.synthesize,
+                    text=single_body["script"],
+                    voice_id=single_body.get("voice_id", ""),
+                    speed=voice_params.get("speed", 1.0),
+                    volume=voice_params.get("volume", 1.0),
+                    emotion=voice_params.get("emotion", 0.5),
+                )
 
-                await emitter.emit_batch("batch_item_done", item_index=i, work_id=f"work_{uuid.uuid4().hex[:8]}")
+                # Resample
+                resampled_path = tts_path.replace(".wav", "_16k.wav")
+                await asyncio.to_thread(
+                    video_synthesizer.resample_audio, tts_path, resampled_path, 16000
+                )
+
+                # Lipsync
+                await emitter.emit_batch("batch_item_progress", item_index=i, step="lipsync", progress=0.6)
+                dh_video = _get_digital_human_video(single_body.get("digital_human_id", ""))
+                lipsync_path = await asyncio.to_thread(
+                    lipsync_engine.process, dh_video, resampled_path
+                )
+
+                # Synthesis
+                await emitter.emit_batch("batch_item_progress", item_index=i, step="synthesis", progress=0.9)
+                batch_save_dir = settings.get("defaultVideoSavePath", "")
+                if not batch_save_dir:
+                    batch_save_dir = os.path.join(os.path.expanduser("~"), "Documents", "智影口播", "作品")
+                os.makedirs(batch_save_dir, exist_ok=True)
+                out_name = single_body["output_name"]
+                out_path = os.path.join(batch_save_dir, f"{out_name}.mp4")
+                await asyncio.to_thread(
+                    video_synthesizer.synthesize,
+                    lipsync_video_path=lipsync_path,
+                    audio_path=tts_path,
+                    output_path=out_path,
+                    background=single_body.get("background"),
+                    subtitle=single_body.get("subtitle"),
+                    bgm=single_body.get("bgm"),
+                    aspect_ratio=single_body.get("aspect_ratio", "9:16"),
+                )
+
+                # Thumbnail + save to works
+                thumb_dir = os.path.join(batch_save_dir, ".thumbs")
+                os.makedirs(thumb_dir, exist_ok=True)
+                thumb_path = os.path.join(thumb_dir, f"{out_name}.jpg")
+                await asyncio.to_thread(
+                    video_synthesizer.extract_thumbnail, out_path, thumb_path
+                )
+
+                from src.utils.file_utils import get_video_duration, get_file_size
+                duration = get_video_duration(out_path) or 0.0
+                file_size = get_file_size(out_path) or 0
+
+                work = works_repo.create({
+                    "name": out_name,
+                    "file_path": out_path,
+                    "thumbnail_path": thumb_path,
+                    "duration_seconds": duration,
+                    "aspect_ratio": single_body.get("aspect_ratio", "9:16"),
+                    "file_size_bytes": file_size,
+                    "is_trial_watermark": False,
+                    "project_config": {
+                        "script": single_body["script"],
+                        "voice_id": single_body.get("voice_id", ""),
+                        "digital_human_id": single_body.get("digital_human_id", ""),
+                        "aspect_ratio": single_body.get("aspect_ratio", "9:16"),
+                    },
+                })
+                work_id = work["id"] if work else f"work_{uuid.uuid4().hex[:8]}"
+
+                await emitter.emit_batch("batch_item_done", item_index=i, work_id=work_id)
                 succeeded += 1
 
             except Exception as e:

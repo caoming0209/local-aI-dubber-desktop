@@ -17,6 +17,16 @@ _engine_root = str(Path(__file__).resolve().parent.parent.parent)
 if _engine_root not in sys.path:
     sys.path.insert(0, _engine_root)
 
+# Add third_party paths for CosyVoice and Wav2Lip
+_third_party = os.path.join(_engine_root, "third_party")
+for _subdir in ["CosyVoice", "Wav2Lip"]:
+    _path = os.path.join(_third_party, _subdir)
+    if os.path.isdir(_path) and _path not in sys.path:
+        sys.path.insert(0, _path)
+_matcha = os.path.join(_third_party, "CosyVoice", "third_party", "Matcha-TTS")
+if os.path.isdir(_matcha) and _matcha not in sys.path:
+    sys.path.insert(0, _matcha)
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse

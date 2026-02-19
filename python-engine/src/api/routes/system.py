@@ -21,14 +21,19 @@ async def update_settings(body: dict):
 
 @router.get("/system/hardware")
 async def get_hardware():
-    """Return hardware info. Full implementation in Phase 9."""
+    """Return hardware info including GPU detection."""
     import platform
+    from src.core.gpu_detector import gpu_detector
+
+    gpu_info = gpu_detector.detect()
 
     data = {
         "cpu": platform.processor() or "Unknown",
         "memory_gb": 0,
-        "gpu": "Unknown",
-        "gpu_vram_gb": 0,
+        "gpu": gpu_info["gpu_name"],
+        "gpu_vendor": gpu_info["gpu_vendor"],
+        "gpu_vram_gb": gpu_info["gpu_vram_gb"],
+        "gpu_backend": gpu_info["backend"],
         "disk_free_gb": 0,
         "os": f"{platform.system()} {platform.version()}",
     }
@@ -45,15 +50,9 @@ async def get_hardware():
 
 @router.post("/system/gpu-check")
 async def gpu_check():
-    """Check GPU compatibility. Full implementation in Phase 9."""
-    return {
-        "success": True,
-        "data": {
-            "gpu_available": False,
-            "cuda_version": None,
-            "recommendation": "not_detected",
-        },
-    }
+    """Check GPU compatibility for AI inference."""
+    from src.core.gpu_detector import gpu_detector
+    return {"success": True, "data": gpu_detector.detect()}
 
 
 @router.get("/system/cache-info")

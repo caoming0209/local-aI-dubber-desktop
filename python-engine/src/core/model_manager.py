@@ -105,6 +105,14 @@ class ModelManager:
         if is_dev_mode():
             return ModelVerifyResult(True)
 
+        # Check CosyVoice2 base model exists
+        cosyvoice_dir = os.path.join(self.get_models_dir(), "cosyvoice2", "CosyVoice2-0.5B")
+        if not os.path.isdir(cosyvoice_dir):
+            return ModelVerifyResult(
+                False, "MODEL_NOT_FOUND",
+                "CosyVoice2 基础模型未下载，请先下载 CosyVoice2-0.5B 模型。"
+            )
+
         conn = get_connection()
         row = conn.execute(
             "SELECT model_path, download_status FROM voice_models WHERE id = ?",
@@ -125,6 +133,26 @@ class ModelManager:
 
         if os.path.isdir(model_path):
             return self.verify_model_dir(model_path, quick=quick)
+
+        return ModelVerifyResult(True)
+
+    def check_lipsync_model_ready(self) -> ModelVerifyResult:
+        """Check if Wav2Lip model files are present.
+
+        Checks for wav2lip_gan.pth in the wav2lip model directory.
+        """
+        from src.utils.dev_mode import is_dev_mode
+        if is_dev_mode():
+            return ModelVerifyResult(True)
+
+        wav2lip_dir = os.path.join(self.get_models_dir(), "wav2lip")
+        checkpoint = os.path.join(wav2lip_dir, "wav2lip_gan.pth")
+
+        if not os.path.isfile(checkpoint):
+            return ModelVerifyResult(
+                False, "MODEL_NOT_FOUND",
+                "Wav2Lip 模型未找到，请下载 wav2lip_gan.pth 到模型目录。"
+            )
 
         return ModelVerifyResult(True)
 
