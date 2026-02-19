@@ -71,7 +71,7 @@ npm run build:win  # electron-builder 打包 Windows NSIS 安装包
 
 | 包 | 版本 | 用途 |
 |----|------|------|
-| `electron` | 29+ | 桌面应用壳 |
+| `electron` | 40+ | 桌面应用壳 |
 | `react` | 19.x | UI 框架 |
 | `react-dom` | 19.x | DOM 渲染 |
 | `react-router-dom` | 7.x | 客户端路由（HashRouter） |

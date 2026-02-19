@@ -162,6 +162,22 @@
 
 激活服务器为轻量级 REST API，Python 后端在激活/解绑时调用一次。
 
+### 激活服务器 URL 安全配置
+
+`ACTIVATION_SERVER` 地址**编译期写入** Python 源码常量，由 Nuitka 编译为原生代码后不可在运行时修改：
+
+```python
+# python-engine/src/license/validator.py
+# 此常量由 Nuitka 编译为二进制，无法在运行时动态替换
+ACTIVATION_SERVER = "https://activate.zhiying-koubo.com"
+```
+
+**约束**：
+- 地址不得从配置文件或环境变量读取（防止用户替换为伪造服务器）
+- 仅允许 HTTPS；HTTP 请求在代码层拦截并拒绝
+- 证书校验不可跳过（`verify=True`，不允许 `verify=False`）
+- 如需变更服务器地址，必须发布新版本安装包
+
 ### POST {ACTIVATION_SERVER}/api/v1/activate
 
 **Request**:

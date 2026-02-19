@@ -9,7 +9,7 @@
 
 ## Technical Context
 
-**Language/Version**: JavaScript/TypeScript (Electron 29+, React 19, Node 20 LTS) + Python 3.11
+**Language/Version**: JavaScript/TypeScript (Electron 40+, React 19, Node 20 LTS) + Python 3.11
 **Primary Dependencies**: Electron, React 19, React Router v7, Zustand, Vite 6, Tailwind CSS, Lucide React; Python: FastAPI, Wav2Lip（v1.0）, CosyVoice 2（主 TTS）, VITS（低配备选 TTS）, FFmpeg-python, SQLite3, cryptography; 打包保护: electron-builder, PyInstaller, Nuitka（仅 license 模块）
 **Storage**: SQLite（作品库 + 项目配置快照）; JSON 文件（应用设置、授权状态）; 本地文件系统（视频、模型、缩略图、BGM）
 **Testing**: Vitest + React Testing Library（前端单元）; Playwright（E2E/Electron）; pytest（Python 后端）

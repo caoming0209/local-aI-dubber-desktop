@@ -14,7 +14,10 @@
       "Read(//c/Users/cm020/.local/bin//**)",
       "Bash(specify --help:*)",
       "Bash(specify version)",
-      "Bash(specify check:*)"
+      "Bash(specify check:*)",
+      "WebFetch(domain:releases.electronjs.org)",
+      "WebFetch(domain:www.electronjs.org)",
+      "Bash(powershell -ExecutionPolicy Bypass -File:*)"
     ]
   }
 }

@@ -12,6 +12,50 @@
 - **认证**: 无（本地环回地址，仅本机可访问）
 - **基础路径**: `http://127.0.0.1:{port}/api`
 
+**最后更新**: 2026-02-19（补充：预加载 API 层定义、SSE 生命周期、作业状态查询、批量并发模型、数字人上传视频规格）
+
+---
+
+## 预加载 API 层（Preload API）
+
+Electron 通过 `contextBridge` 向渲染进程暴露 `window.electronAPI` 对象。渲染进程**只能**通过此对象与主进程/后端通信，不得直接访问 Node.js 模块。
+
+```typescript
+// preload/index.ts 中暴露的 API 接口
+
+window.electronAPI = {
+  // ─── HTTP 请求代理 ───────────────────────────────────────────
+  // 渲染进程通过此方法发起对 Python 引擎的 REST 请求
+  engine: {
+    request(method: 'GET'|'POST'|'PUT'|'PATCH'|'DELETE', path: string, body?: object): Promise<ApiResponse>,
+  },
+
+  // ─── SSE 进度订阅 ────────────────────────────────────────────
+  // 订阅指定 job_id 的 SSE 进度流
+  // onEvent: 每条 SSE data 回调；onDone: 流结束回调；onError: 错误回调
+  // 返回 unsubscribe 函数
+  pipeline: {
+    subscribeProgress(jobId: string, onEvent: (data: object) => void, onDone: () => void, onError: (err: Error) => void): () => void,
+  },
+
+  // ─── 系统操作 ────────────────────────────────────────────────
+  system: {
+    openPath(path: string): Promise<void>,           // 用系统默认程序打开文件
+    showItemInFolder(path: string): Promise<void>,   // 在资源管理器中显示
+    selectDirectory(): Promise<string | null>,        // 打开目录选择对话框
+    selectFile(filters: FileFilter[]): Promise<string | null>,  // 打开文件选择对话框
+  },
+
+  // ─── 引擎端口（只读） ────────────────────────────────────────
+  getEnginePort(): number,
+}
+```
+
+**安全约束**：
+- 渲染进程中禁止 `require()`、`import` Node.js 内置模块
+- `engine.request` 只转发到 `127.0.0.1:{port}`，不允许请求外部 URL
+- `system` 方法中涉及文件路径的操作，主进程须校验路径在允许范围内（不允许遍历到系统目录）
+
 ---
 
 ## 启动握手
@@ -23,6 +67,17 @@ Python 进程启动后，向 stdout 输出一行 JSON：
 ```
 
 Electron 主进程读取此行后，将 `port` 存储并转发给渲染进程。
+
+**Python 进程崩溃恢复策略**：
+
+| 场景 | 行为 |
+|------|------|
+| 启动后 10 秒内未收到就绪信号 | 自动重启，最多 3 次；第 3 次失败后弹出错误对话框 |
+| 运行中进程异常退出（exit code ≠ 0） | 自动重启（指数退避：1s、2s、4s），最多 3 次 |
+| 3 次重启均失败 | 显示「推理引擎启动失败」对话框，提供「重新启动引擎」按钮；应用主窗口保持打开（不退出） |
+| 用户主动关闭应用 | Electron 主进程向 Python 发送 SIGTERM，等待 3 秒后强制 kill |
+
+进行中的生成任务在引擎崩溃后视为失败，不自动恢复；前端展示「生成失败，引擎意外退出」错误提示。
 
 ---
 
@@ -120,6 +175,12 @@ Electron 主进程读取此行后，将 `port` 存储并转发给渲染进程。
 ### GET /api/pipeline/progress/{job_id}
 **说明**: SSE 端点，实时推送生成进度。
 
+**SSE 连接生命周期**：
+- 服务端在任务完成（`step: "completed"`）或失败（`step: "failed"`）后发送最后一条事件，然后**主动关闭连接**。
+- 若 SSE 连接意外断开（网络抖动、前端页面切换），前端在 2 秒后自动调用 `GET /api/jobs/{job_id}/state` 查询当前状态，按需重新订阅或展示最终结果。
+- 同一 `job_id` 可多次订阅（幂等），服务端在任务运行中可接受多个并发 SSE 客户端。
+- 超时：若任务超过 30 分钟未完成，服务端发送 `{"step": "timeout"}` 事件并取消任务。
+
 **Response** (text/event-stream):
 ```
 data: {"step": "script_optimization", "step_index": 1, "total_steps": 4, "progress": 0.2, "message": "文案优化中..."}
@@ -134,6 +195,31 @@ data: {"step": "completed", "step_index": 4, "total_steps": 4, "progress": 1.0, 
 
 data: {"step": "failed", "error": {"code": "MODEL_NOT_FOUND", "message": "语音模型未下载，请前往音色管理下载"}}
 ```
+
+---
+
+### GET /api/jobs/{job_id}/state
+**说明**: 查询作业当前状态快照（用于 SSE 断连后的状态恢复）。作业状态仅保存在 Python 进程内存中，引擎重启后丢失。
+
+**Response** (200):
+```json
+{
+  "success": true,
+  "data": {
+    "job_id": "job_abc123",
+    "status": "running",
+    "current_step": "lipsync",
+    "step_index": 3,
+    "total_steps": 4,
+    "progress": 0.65,
+    "created_at": "2026-02-19T10:30:00Z"
+  }
+}
+```
+
+`status` 可选值：`pending` / `running` / `paused` / `completed` / `failed` / `cancelled` / `not_found`
+
+`not_found` 表示引擎重启后状态已丢失，前端应展示「生成状态未知，请检查作品库」提示。
 
 ---
 
@@ -163,6 +249,8 @@ data: {"step": "failed", "error": {"code": "MODEL_NOT_FOUND", "message": "语音
 
 ### POST /api/pipeline/batch
 **说明**: 发起批量生成任务。
+
+**并发模型**：批量任务采用**严格串行执行**（每次只处理一条）。原因：Wav2Lip 推理在 CPU 模式下占用约 80% 内存，并行执行会触发 OOM；GPU 显存容量同样不支持并行推理。前端展示当前进度为"第 N 条 / 共 M 条"，用户可随时暂停或取消。
 
 **Request**:
 ```json
@@ -277,6 +365,20 @@ data: {"type": "batch_completed", "total": 50, "succeeded": 48, "failed": 2, "fa
 ### POST /api/digital-humans/upload
 **Content-Type**: multipart/form-data
 - `file`: MP4 文件（≤ 100MB）
+
+**上传视频技术要求**（Wav2Lip 口型适配前提）：
+
+| 参数 | 要求 | 说明 |
+|------|------|------|
+| 容器格式 | MP4 | 仅支持 .mp4 扩展名 |
+| 视频编码 | H.264 (AVC) | H.265/HEVC 不支持，会在上传前提示转码 |
+| 分辨率 | 480p – 1080p | 宽度偶数像素；低于 480p 人脸检测成功率下降 |
+| 帧率 | 15 – 60 fps | 推荐 25fps；异常帧率由 FFmpeg 预处理转换 |
+| 时长 | 5 – 120 秒 | 过短影响口型自然度；过长增加适配时间 |
+| 人脸要求 | 单人正脸或不超过 ±30° 侧脸 | Wav2Lip 对大侧脸角度效果差，上传时用人脸检测预验证并提示 |
+| 文件大小 | ≤ 100 MB | 超出拒绝上传并提示压缩 |
+
+上传后服务端执行预验证（人脸检测 + 编码检查），预验证失败直接返回 400 错误，不进入适配队列。
 
 **Response** (202):
 ```json

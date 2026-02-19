@@ -231,3 +231,62 @@ settings.json (独立，全局单例)
 3. **license.dat 由 Python 后端独占读写**：激活逻辑和状态查询均走 `/api/license` 接口。
 4. **文件路径存储绝对路径**：所有 `*_path` 字段存储绝对路径；用户迁移存储路径时，批量更新相关路径字段。
 5. **删除联动**：删除作品时同步删除 MP4 + 封面图；删除自定义数字人时同步删除适配视频文件；删除音色模型时只删除 model_path 文件，保留数据库记录（状态改为 not_downloaded）。
+
+---
+
+## Schema 迁移策略
+
+**版本管理机制**：使用 SQLite 内置的 `PRAGMA user_version` 存储当前 schema 版本号。
+
+**迁移文件结构**（在 `python-engine/src/storage/migrations/` 目录下）：
+
+```text
+migrations/
+├── V001__initial_schema.sql       # 建表：works, project_configs, digital_humans, voice_models, bgm_tracks
+├── V002__add_works_resolution.sql # 示例：新增字段
+└── V003__voice_model_checksum.sql # 示例：新增 checksum 字段
+```
+
+**命名规范**：`V{三位序号}__{snake_case_描述}.sql`，序号严格递增。
+
+**执行时机**：Python 引擎每次启动时在 `database.py` 中执行：
+```python
+current_version = conn.execute("PRAGMA user_version").fetchone()[0]
+# 按序号升序扫描 migrations/ 目录，执行 version > current_version 的所有脚本
+# 每个脚本执行成功后立即 PRAGMA user_version = N
+```
+
+**原子性保证**：每个迁移脚本在单个事务中执行，失败则回滚并终止启动（显示「数据库迁移失败」错误对话框）。
+
+---
+
+## 模型文件完整性校验
+
+**目标**：检测下载不完整或磁盘损坏的模型文件，避免推理时静默失败。
+
+**校验文件**：每个模型目录下存储 `checksums.json`（由服务端随模型一同发布）：
+
+```json
+{
+  "wav2lip.pth": "sha256:a3f1c2d4...",
+  "wav2lip_gan.pth": "sha256:b7e9f0a2...",
+  "cosyvoice2_base.pt": "sha256:c1d2e3f4..."
+}
+```
+
+**校验时机**：
+
+| 时机 | 行为 |
+|------|------|
+| 下载完成后 | 立即校验；失败则标记 `download_status = "error"`，删除损坏文件 |
+| 应用启动时 | 对已下载模型的关键权重文件进行快速校验（仅验 SHA-256 前 4KB 哈希，< 200ms） |
+| 推理任务开始前 | 完整校验当前任务所需模型；失败返回 `MODEL_CORRUPTED` 错误码 |
+
+**错误码补充**（新增至 ipc-api.md 错误码表）：
+
+| code | 含义 |
+|------|------|
+| `MODEL_CORRUPTED` | 模型文件校验失败，需重新下载 |
+| `MODEL_DOWNLOAD_INCOMPLETE` | 下载未完成，文件不完整 |
+
+**孤立模型文件处理**：启动时扫描模型目录，若存在不在 `voice_models.model_path` 中的文件，且文件大小 > 100MB，则列入「未识别文件」提示用户清理（不自动删除）。

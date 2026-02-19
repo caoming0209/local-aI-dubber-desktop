@@ -2,7 +2,7 @@
 
 **Branch**: `001-ai-dubber-desktop` | **Date**: 2026-02-19
 **Status**: 所有 NEEDS CLARIFICATION 项已解决
-**最后更新**: 2026-02-19（新增 UI 组件库选型、口型同步版本路线；Topic 5 更新：Element Plus → React 19 + Tailwind CSS）
+**最后更新**: 2026-02-19（新增 UI 组件库选型、口型同步版本路线；Topic 5 更新：Element Plus → React 19 + Tailwind CSS；新增 Topic 8：Electron 渲染集成策略；Topic 9：Python 进程生命周期）
 
 ---
 
