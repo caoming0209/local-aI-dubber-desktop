@@ -3,7 +3,7 @@
 **Input**: Design documents from `/specs/001-ai-dubber-desktop/`
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
-**Tests**: Not explicitly requested in the feature specification. Test tasks are omitted.
+**Tests**: Constitution 要求每个用户故事至少一个验收测试。测试任务包含在各 Phase 末尾。
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -20,6 +20,11 @@
 - **renderer/**: React 19 渲染进程（基于 AI 生成初始项目）
 - **python-engine/**: Python 推理引擎
 - **shared/**: 前后端共享类型定义
+
+### 开发规范提醒
+
+- **契约先行**：任何涉及新增或修改 Electron↔Python API 端点的任务，实现代码前必须先更新 contracts/ 对应文档
+- **测试覆盖**：每个 User Story 末尾包含验收测试任务，不可跳过
 
 ---
 
@@ -46,6 +51,7 @@
 
 ### Electron 主进程 & Preload
 
+- [ ] T110 审查 contracts/ 文档完整性：逐一核对 contracts/ipc-api.md 和 contracts/license.md 中定义的所有端点，确认与 spec.md 功能需求一一对应，补充缺失的错误码（MODEL_CORRUPTED、MODEL_DOWNLOAD_INCOMPLETE），标注后续 Phase 中需新增的端点
 - [ ] T009 实现 Electron 主进程入口 electron-app/src/main/index.ts：创建 BrowserWindow（加载 renderer Vite dev server 或 dist/index.html）、设置 nodeIntegration:false + contextIsolation:true
 - [ ] T010 实现 Python 进程管理器 electron-app/src/main/python-manager.ts：启动 python-engine 子进程、读取 stdout 解析 `{"status":"ready","port":N}`、崩溃恢复（指数退避 1s/2s/4s，最多 3 次）、关闭时 SIGTERM + 3s 强制 kill
 - [ ] T011 实现 Preload 脚本 electron-app/src/preload/index.ts：通过 contextBridge 暴露 window.electronAPI（engine.request、pipeline.subscribeProgress、system.openPath/showItemInFolder/selectDirectory/selectFile、getEnginePort），按 contracts/ipc-api.md Preload API 定义
@@ -89,6 +95,7 @@
 - [ ] T024 [P] [US1] 实现口型同步引擎封装 python-engine/src/core/lipsync_engine.py：Wav2Lip 推理接口（输入视频+音频 → 输出口型同步视频），支持 GPU/CPU 双模式
 - [ ] T025 [P] [US1] 实现 FFmpeg 视频合成器 python-engine/src/core/video_synthesizer.py：合成背景（纯色/场景/自定义图片）、叠加字幕（字体/字号/颜色/位置）、混入 BGM（音量比例控制）、输出 1080P MP4
 - [ ] T026 [P] [US1] 实现 GPU 检测器 python-engine/src/core/gpu_detector.py：检测 CUDA 可用性、显卡型号、显存大小、推荐推理模式（auto/cpu/gpu）
+- [ ] T112 [US1] 实现流水线模型预检与自动下载 python-engine/src/core/model_manager.py 补充：pipeline 启动前检测 CosyVoice 2 和 Wav2Lip 模型是否已下载，未下载时自动触发下载并通过 SSE 推送下载进度（FR-091），下载完成后继续执行流水线；模型缺失且用户取消下载时返回 MODEL_NOT_FOUND 错误
 - [ ] T027 [US1] 实现单条生成流水线路由 python-engine/src/api/routes/pipeline.py：POST /api/pipeline/single（接收完整配置，创建 job，返回 job_id 202）、GET /api/pipeline/progress/{job_id}（SSE 进度流，按 contracts/ipc-api.md 格式：script_optimization→tts→lipsync→synthesis→completed/failed）、POST /api/pipeline/pause/{job_id}、POST /api/pipeline/resume/{job_id}、POST /api/pipeline/cancel/{job_id}
 - [ ] T028 [US1] 实现作业状态查询路由 python-engine/src/api/routes/pipeline.py：GET /api/jobs/{job_id}/state 返回作业当前状态快照（status/current_step/progress），用于 SSE 断连恢复
 - [ ] T029 [US1] 实现作品写入 python-engine/src/storage/works_repo.py：视频生成成功后写入 works 表和 project_configs 表（关联 FK），提取首帧封面图
@@ -106,6 +113,8 @@
 - [ ] T038 [US1] 实现视频播放器组件 renderer/src/components/VideoPlayer.tsx：播放/暂停、进度条拖动、音量调节，支持本地 MP4 文件路径播放
 - [ ] T039 [US1] 实现加载动画：所有耗时超过 3 秒的操作（文案优化、语音合成、口型同步）显示加载状态（FR-021）
 - [ ] T040 [US1] 实现右侧预览区实时更新：配置变更后 1 秒内同步更新效果展示（FR-022）
+- [ ] T100 [US1] 验收测试：编写 Playwright E2E 测试 renderer/tests/e2e/single-creation.spec.ts — 验证从文案输入到视频生成成功的完整 5 步向导流程（对应 spec.md US1 Acceptance Scenario 3）
+- [ ] T101 [US1] 验收测试：编写 pytest 集成测试 python-engine/tests/integration/test_pipeline_single.py — 验证 POST /api/pipeline/single 返回 job_id、SSE 进度流推送完整步骤、生成成功后 works 表写入记录
 
 **Checkpoint**: 用户可完成从文案输入到 MP4 视频生成的全流程。MVP 可演示。
 
@@ -127,6 +136,7 @@
 - [ ] T043 [US2] 实现 BatchCreation 页面 renderer/src/pages/BatchCreation.tsx：手动多行输入 + TXT 文件导入两种模式（FR-030），100 条上限校验（FR-031），自动校验有效性并标注无效文案（FR-032），文案列表的查看/编辑/删除/批量删除/清空操作（FR-033）
 - [ ] T044 [US2] 实现批量统一配置面板：复用 US1 的语音/数字人/视频设置组件，预览展示第一条文案效果（FR-034），自定义保存路径和命名前缀（FR-035）
 - [ ] T045 [US2] 实现批量生成进度展示：整体进度 + 当前生成条数（「正在生成第 N 条 / 共 M 条」FR-036），暂停/继续/取消按钮，完成后汇总失败条数和原因（FR-037）
+- [ ] T102 [US2] 验收测试：编写 pytest 集成测试 python-engine/tests/integration/test_pipeline_batch.py — 验证批量生成串行执行、失败跳过继续、完成后汇总失败条数
 
 **Checkpoint**: 用户可批量导入文案并一键串行生成多条视频。
 
@@ -141,14 +151,15 @@
 ### 后端：数字人 API
 
 - [ ] T046 [P] [US3] 实现数字人 CRUD 路由 python-engine/src/api/routes/digital_humans.py：GET /api/digital-humans（列表，支持 search/source/category 筛选）、PATCH /api/digital-humans/{id}（编辑名称/分类，仅 custom）、POST /api/digital-humans/{id}/favorite（切换收藏）、DELETE /api/digital-humans/{id}（仅 custom，联动删除适配视频文件）
-- [ ] T047 [US3] 实现数字人上传与适配路由 python-engine/src/api/routes/digital_humans.py：POST /api/digital-humans/upload（multipart，≤100MB，H.264，480p-1080p，5-120s，人脸预验证），返回 job_id + digital_human_id（202），GET /api/digital-humans/adapt-progress/{job_id}（SSE 适配进度），POST /api/digital-humans/{id}/re-adapt（重新适配）
-- [ ] T048 [US3] 实现上传视频预验证逻辑：检查容器格式 MP4、编码 H.264、分辨率/帧率/时长范围、人脸检测（单人正脸±30°）、文件大小≤100MB，不合格返回 400 错误码
+- [ ] T047 [US3] 实现数字人上传与适配路由 python-engine/src/api/routes/digital_humans.py：POST /api/digital-humans/upload（multipart，≤500MB，支持 MP4/MOV/AVI/MKV，3-300s，≥360P，人脸预验证），返回 job_id + digital_human_id（202），GET /api/digital-humans/adapt-progress/{job_id}（SSE 适配进度），POST /api/digital-humans/{id}/re-adapt（重新适配）
+- [ ] T048 [US3] 实现上传视频预验证与 FFmpeg 预处理流程：① 校验文件大小≤500MB 和容器格式（MP4/MOV/AVI/MKV）；② FFmpeg 预处理（转码 H.264 + 缩放≤1080P + 统一 25fps + 去除音轨）；③ 人脸检测（s3fd，单人正脸±30°）；④ 校验时长 3-300s、分辨率≥360P；不合格返回 400 错误码并提示具体原因；超过 120s 时长附加慢速处理提示
 
 ### 前端：数字人管理页面
 
 - [ ] T049 [US3] 实现 AvatarManager 页面 renderer/src/pages/AvatarManager.tsx：三分类展示（官方/我的收藏/自定义 FR-040）、预览循环播放、收藏/取消收藏、使用按钮跳转制作（FR-041）、搜索框实时筛选 0.5s 内（FR-046）
 - [ ] T050 [US3] 实现自定义数字人上传流程：上传 MP4、适配进度展示（10-30s FR-044）、命名和分类选择、适配失败提示+重新上传入口（FR-045）
 - [ ] T051 [US3] 实现自定义数字人管理操作：编辑名称/分类、删除确认弹窗（FR-042）、重新适配、「立即使用」跳转单条制作步骤 3（FR-043）
+- [ ] T103 [US3] 验收测试：编写 pytest 集成测试 python-engine/tests/integration/test_digital_humans.py — 验证上传 MP4 预验证、适配进度 SSE、适配成功后记录写入
 
 **Checkpoint**: 用户可浏览官方数字人，上传自定义数字人并完成口型适配。
 
@@ -173,6 +184,7 @@
 - [ ] T057 [US4] 实现音色试听功能：点击试听 1 秒内开始播放（FR-052），暂停/重新播放，未下载音色自动触发下载
 - [ ] T058 [US4] 实现模型下载进度 UI：实时进度条+剩余时间（FR-053），暂停/继续下载按钮
 - [ ] T059 [US4] 实现模型删除功能：确认弹窗+空间释放说明（FR-054），删除后状态变为「未下载」
+- [ ] T104 [US4] 验收测试：编写 pytest 集成测试 python-engine/tests/integration/test_voices.py — 验证模型下载触发、暂停/继续、SHA-256 校验、删除后状态变更
 
 **Checkpoint**: 用户可浏览试听音色，下载/删除模型，收藏常用音色。
 
@@ -195,6 +207,7 @@
 - [ ] T063 [US5] 实现 WorksLibrary 页面 renderer/src/pages/WorksLibrary.tsx：卡片式展示（封面/名称/时长/生成时间/分辨率/存储路径 FR-060）、每页 12 条分页+页码跳转（FR-062）、按生成时间/时长排序（FR-061）、搜索框+筛选器（名称/日期/分辨率/比例 FR-063）
 - [ ] T064 [US5] 实现作品操作：播放（复用 VideoPlayer 组件 FR-064）、打开文件位置、重新编辑（准确恢复原始配置跳转 SingleCreation FR-065）、重命名、删除确认弹窗（FR-066）、批量勾选删除、清理全部确认弹窗（FR-067）
 - [ ] T065 [US5] 实现作品库空状态：显示引导文案+跳转单条制作入口
+- [ ] T105 [US5] 验收测试：编写 Playwright E2E 测试 renderer/tests/e2e/works-library.spec.ts — 验证作品卡片展示、搜索筛选、重新编辑恢复原始配置、批量删除
 
 **Checkpoint**: 用户可浏览管理所有已生成视频，支持搜索筛选、播放、重新编辑、删除。
 
@@ -225,6 +238,7 @@
 ### 后端：水印叠加
 
 - [ ] T076 [US8] 在 python-engine/src/core/video_synthesizer.py 中集成水印逻辑：试用版生成的视频右下角叠加软件水印，正式版无水印
+- [ ] T106 [US8] 验收测试：编写 pytest 集成测试 python-engine/tests/integration/test_license.py — 验证试用次数扣减、激活码验证流程、加密存储读写、设备指纹生成
 
 **Checkpoint**: 完整授权流程可用——试用 5 次、水印、激活码输入、联网验证、离线使用。
 
@@ -248,6 +262,7 @@
 - [ ] T081 [US6] 实现 Settings 页面 renderer/src/pages/Settings.tsx：基础设置（开机自启/默认保存路径/主题切换 FR-070/FR-071）、模型下载设置（存储路径/下载限速/自动下载 FR-072）、性能设置（推理模式/CPU 限制 FR-073）、硬件信息展示+GPU 检测按钮（FR-074）、缓存查看+清理按钮（FR-075）、版本检查+更新按钮（FR-076）、重置所有设置按钮（FR-077）
 - [ ] T082 [US6] 实现主题切换功能：light/dark 主题实时切换（FR-071），Tailwind dark mode 类名切换，持久化到 settings
 - [ ] T083 [US6] 在 Settings 页面集成授权管理子项：展示授权类型/剩余次数/激活码/绑定设备数/解绑按钮（FR-108）
+- [ ] T107 [US6] 验收测试：编写 Playwright E2E 测试 renderer/tests/e2e/settings.spec.ts — 验证设置读取/修改/持久化、主题切换实时生效、GPU 检测返回结果
 
 **Checkpoint**: 用户可配置所有软件参数，GPU 检测正常，主题切换生效。
 
@@ -262,6 +277,7 @@
 - [ ] T084 [US7] 实现 Home 首页 renderer/src/pages/Home.tsx：三个主操作按钮（新建视频/批量制作/查看作品 FR-001）、最近 3 条记录展示（FR-002，hover 显示播放/编辑/删除选项）、软件版本号展示（FR-004）
 - [ ] T085 [US7] 实现教程弹窗组件：3 步快速制作图文教程，可拖动/可关闭/可重复查看（FR-003）
 - [ ] T086 [US7] 首页最近记录数据接入：调用 GET /api/works?sort=created_at_desc&page_size=3 获取最新 3 条作品
+- [ ] T108 [US7] 验收测试：编写 Playwright E2E 测试 renderer/tests/e2e/home.spec.ts — 验证首页三个快速入口可点击跳转、最近 3 条记录展示
 
 **Checkpoint**: 首页展示完整，新用户可快速找到功能入口。
 
@@ -275,6 +291,7 @@
 
 - [ ] T087 [P] [US9] 实现 Help 页面 renderer/src/pages/Help.tsx：分类使用教程（快速入门/单条制作/批量制作/数字人上传/音色使用 FR-080）、分类 FAQ 展开/折叠（FR-081）、关键词搜索实时筛选（FR-082）、客服入口（FR-083）
 - [ ] T088 [P] [US9] 准备静态帮助内容数据：教程图文和 FAQ 条目 JSON/TS 常量（内置静态内容，随版本更新）
+- [ ] T109 [US9] 验收测试：编写 Playwright E2E 测试 renderer/tests/e2e/help.spec.ts — 验证 FAQ 搜索实时筛选、教程分类展示、客服入口可点击
 
 **Checkpoint**: 帮助模块可用，FAQ 搜索正常。
 
@@ -291,6 +308,7 @@
 - [ ] T093 [P] 实现 BGM 数据初始化：内置 10 首 BGM 数据插入 bgm_tracks 表（builtin，随安装包分发），支持自定义上传
 - [ ] T094 [P] 实现官方数字人数据初始化：内置 10-20 个官方数字人数据插入 digital_humans 表（official，随安装包分发）
 - [ ] T095 配置 electron-builder.yml 打包参数：Windows NSIS 安装包配置、文件关联、安装路径、包含 python-engine 打包产物
+- [ ] T111 [US6] 实现自动更新下载与安装流程 electron-app/src/main/updater.ts：集成 electron-updater，检测到新版本后下载更新包、显示下载进度、下载完成提示用户重启安装；更新过程中禁止关闭软件（拦截 window close 事件）；下载失败时提示并支持重试（FR-076）
 - [ ] T096 配置 PyInstaller 打包 python-engine 为独立 .exe：包含所有依赖和模型加载逻辑
 - [ ] T097 配置 Nuitka 单独编译 python-engine/src/license/ 模块为原生 .pyd 扩展：防逆向保护激活验证逻辑
 - [ ] T098 实现开发模式特殊行为：NODE_ENV=development 时跳过授权检查、无水印、无生成限制

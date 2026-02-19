@@ -43,8 +43,7 @@ specs/001-ai-dubber-desktop/
 ├── data-model.md        # Phase 1: 所有实体定义与关系
 ├── quickstart.md        # Phase 1: 开发环境搭建指南
 ├── contracts/
-│   ├── ipc-api.md       # 前端↔后端 HTTP IPC 接口定义
-│   ├── pipeline.md      # 视频生成流水线接口
+│   ├── ipc-api.md       # 前端↔后端 HTTP IPC 接口定义（含视频生成流水线）
 │   └── license.md       # 授权激活接口
 └── tasks.md             # Phase 2 (/speckit.tasks 生成)
 ```
