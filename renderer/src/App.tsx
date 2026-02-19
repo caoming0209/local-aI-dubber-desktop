@@ -8,6 +8,7 @@ import AvatarManager from './pages/AvatarManager';
 import VoiceManager from './pages/VoiceManager';
 import WorksLibrary from './pages/WorksLibrary';
 import Settings from './pages/Settings';
+import Help from './pages/Help';
 import { RoutePath } from './types';
 
 function App() {
@@ -22,7 +23,7 @@ function App() {
           <Route path={RoutePath.VOICES} element={<VoiceManager />} />
           <Route path={RoutePath.WORKS} element={<WorksLibrary />} />
           <Route path={RoutePath.SETTINGS} element={<Settings />} />
-          <Route path={RoutePath.HELP} element={<div className="p-8 text-center text-slate-500">帮助中心功能开发中...</div>} />
+          <Route path={RoutePath.HELP} element={<Help />} />
           <Route path="*" element={<Navigate to={RoutePath.HOME} replace />} />
         </Routes>
       </Layout>

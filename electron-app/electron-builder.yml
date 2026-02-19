@@ -1,0 +1,47 @@
+appId: com.zhiying.koubo
+productName: 智影口播
+copyright: Copyright © 2026
+
+directories:
+  output: release
+  buildResources: assets
+
+files:
+  - dist/**/*
+  - package.json
+
+extraResources:
+  - from: ../python-engine/dist/
+    to: python-engine/
+    filter:
+      - "**/*"
+  - from: ../renderer/dist/
+    to: renderer/
+    filter:
+      - "**/*"
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: assets/icon.ico
+  requestedExecutionLevel: asInvoker
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+  installerHeaderIcon: assets/icon.ico
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 智影口播
+  perMachine: false
+  allowElevation: true
+  installerSidebar: assets/installerSidebar.bmp
+  license: assets/license.txt
+
+publish:
+  provider: generic
+  url: https://update.zhiyingkoubo.com/releases/

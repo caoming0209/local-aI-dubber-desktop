@@ -36,3 +36,20 @@ __pycache__/
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
+
+# Build artifacts
+*.exe
+*.dll
+*.pyd
+
+# Electron
+electron-app/release/
+
+# Python packaging
+python-engine/dist/
+python-engine/build/
+*.spec
+
+# Temporary files
+*.tmp
+*.bak

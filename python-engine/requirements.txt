@@ -1,0 +1,22 @@
+# Web framework
+fastapi==0.115.8
+uvicorn[standard]==0.34.0
+sse-starlette==2.2.1
+
+# Database
+aiofiles==24.1.0
+
+# Encryption & security
+cryptography==44.0.0
+
+# Windows hardware info
+wmi==1.5.1
+pywin32==308
+
+# Video processing
+ffmpeg-python==0.2.0
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.25.3
+httpx==0.28.1
