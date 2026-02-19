@@ -1,5 +1,7 @@
 """Works repository: data access layer for the works and project_configs tables."""
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -166,11 +168,10 @@ class WorksRepo:
                 except OSError:
                     pass
 
-        # Delete config snapshot
+        # Delete work first (child FK), then config snapshot (parent)
+        conn.execute("DELETE FROM works WHERE id = ?", (work_id,))
         if work.get("project_config_id"):
             conn.execute("DELETE FROM project_configs WHERE id = ?", (work["project_config_id"],))
-
-        conn.execute("DELETE FROM works WHERE id = ?", (work_id,))
         conn.commit()
         return True
 

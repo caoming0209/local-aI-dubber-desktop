@@ -5,6 +5,8 @@ import uuid
 import json
 from typing import Optional
 
+from src.utils.dev_mode import is_dev_mode
+
 
 class VideoSynthesizer:
     def __init__(self):
@@ -34,6 +36,17 @@ class VideoSynthesizer:
         import subprocess
 
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+
+        if is_dev_mode():
+            # Stub: create empty placeholder MP4
+            import shutil
+            if os.path.exists(lipsync_video_path):
+                shutil.copy2(lipsync_video_path, output_path)
+            else:
+                with open(output_path, "wb") as f:
+                    f.write(b"")
+            print(f"[synthesizer] DEV stub output: {output_path}")
+            return output_path
 
         # Build FFmpeg command
         cmd = [self._ffmpeg_path, "-y"]
@@ -108,6 +121,11 @@ class VideoSynthesizer:
 
     def resample_audio(self, input_path: str, output_path: str, sample_rate: int = 16000) -> str:
         """Resample audio to target sample rate for Wav2Lip input."""
+        if is_dev_mode():
+            import shutil
+            shutil.copy2(input_path, output_path)
+            return output_path
+
         import subprocess
 
         cmd = [
@@ -122,6 +140,13 @@ class VideoSynthesizer:
 
     def extract_thumbnail(self, video_path: str, output_path: str) -> str:
         """Extract first frame as JPEG thumbnail."""
+        if is_dev_mode():
+            # Create a minimal placeholder JPEG
+            os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+            with open(output_path, "wb") as f:
+                f.write(b"")
+            return output_path
+
         import subprocess
 
         cmd = [

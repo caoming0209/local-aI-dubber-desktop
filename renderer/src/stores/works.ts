@@ -5,7 +5,7 @@ import type {
   WorkDetail,
   WorksListResponse,
   WorksQueryParams,
-} from '../../shared/ipc-types';
+} from '@shared/ipc-types';
 
 interface WorksState {
   works: Work[];

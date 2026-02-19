@@ -3,7 +3,7 @@
  * Wraps window.electronAPI.pipeline.subscribeProgress for use in components.
  */
 
-import type { SingleProgressEvent, BatchProgressEvent } from '../../shared/ipc-types';
+import type { SingleProgressEvent, BatchProgressEvent } from '@shared/ipc-types';
 
 type ProgressEvent = SingleProgressEvent | BatchProgressEvent;
 type Unsubscribe = () => void;

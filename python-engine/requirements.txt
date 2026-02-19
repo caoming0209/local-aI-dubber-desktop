@@ -2,6 +2,7 @@
 fastapi==0.115.8
 uvicorn[standard]==0.34.0
 sse-starlette==2.2.1
+python-multipart==0.0.22
 
 # Database
 aiofiles==24.1.0
@@ -15,6 +16,18 @@ pywin32==308
 
 # Video processing
 ffmpeg-python==0.2.0
+
+# AI inference (torch/torchaudio installed separately via scripts/setup_env.py)
+numpy>=1.24,<2.0
+scipy>=1.10
+librosa>=0.10
+opencv-python>=4.8
+Pillow>=10.0
+tqdm>=4.65
+huggingface_hub>=0.20
+pyyaml>=6.0
+soundfile>=0.12
+onnxruntime>=1.16
 
 # Testing
 pytest==8.3.4

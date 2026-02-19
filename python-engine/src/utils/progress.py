@@ -60,7 +60,7 @@ class ProgressEmitter:
             event = await self._queue.get()
             if event is None:
                 break
-            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            yield json.dumps(event, ensure_ascii=False)
 
 
 class JobManager:

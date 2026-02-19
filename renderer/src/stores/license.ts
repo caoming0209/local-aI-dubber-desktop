@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../services/engine';
-import type { LicenseStatus, ActivateResponse } from '../../shared/ipc-types';
+import type { LicenseStatus, ActivateResponse } from '@shared/ipc-types';
 
 interface LicenseState {
   status: LicenseStatus | null;

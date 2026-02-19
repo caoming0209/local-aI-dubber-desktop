@@ -3,7 +3,7 @@
  * All requests are proxied through window.electronAPI.engine.request.
  */
 
-import type { ApiResponse } from '../../shared/ipc-types';
+import type { ApiResponse } from '@shared/ipc-types';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 

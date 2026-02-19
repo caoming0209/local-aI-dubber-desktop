@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../services/engine';
-import type { AppSettings } from '../../shared/ipc-types';
+import type { AppSettings } from '@shared/ipc-types';
 
 const DEFAULT_SETTINGS: AppSettings = {
   autoStartOnBoot: false,

@@ -10,6 +10,12 @@ import socket
 import sys
 import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+# Ensure python-engine root is on sys.path so `src.*` imports work
+_engine_root = str(Path(__file__).resolve().parent.parent.parent)
+if _engine_root not in sys.path:
+    sys.path.insert(0, _engine_root)
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,6 +32,10 @@ from src.api.routes import license as license_routes
 
 
 def find_free_port() -> int:
+    # In dev mode, use a fixed port so the browser frontend can connect
+    from src.utils.dev_mode import is_dev_mode
+    if is_dev_mode():
+        return 18432
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
@@ -94,4 +104,6 @@ def main():
 
 
 if __name__ == "__main__":
+    # Running directly (not spawned by Electron) → enable dev mode
+    os.environ.setdefault("DEV_MODE", "1")
     main()

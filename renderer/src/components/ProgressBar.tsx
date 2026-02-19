@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, CheckCircle, AlertCircle, Pause, Play, XCircle } from 'lucide-react';
 import { subscribeProgress } from '../services/pipeline';
-import type { SingleProgressEvent } from '../../shared/ipc-types';
+import type { SingleProgressEvent } from '@shared/ipc-types';
 
 interface ProgressBarProps {
   jobId: string;

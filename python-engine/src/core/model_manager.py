@@ -99,7 +99,12 @@ class ModelManager:
 
         Used before pipeline execution to ensure models are ready.
         Quick mode by default for fast startup checks (<200ms).
+        In dev mode, skip the check since engines use stubs.
         """
+        from src.utils.dev_mode import is_dev_mode
+        if is_dev_mode():
+            return ModelVerifyResult(True)
+
         conn = get_connection()
         row = conn.execute(
             "SELECT model_path, download_status FROM voice_models WHERE id = ?",

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { PlayCircle, FolderOpen, Trash2, Edit, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useWorksStore } from '../stores/works';
-import type { AspectRatio } from '../../shared/ipc-types';
+import type { AspectRatio } from '@shared/ipc-types';
 
 const WorksLibrary: React.FC = () => {
   const { works, total, page, totalPages, loading, loadWorks, deleteWork, renameWork } = useWorksStore();

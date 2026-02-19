@@ -6,7 +6,7 @@ import type {
   SubtitleConfig,
   BgmConfig,
   AspectRatio,
-} from '../../shared/ipc-types';
+} from '@shared/ipc-types';
 
 interface ProjectState {
   // Current creation config
@@ -49,7 +49,7 @@ const DEFAULT_STATE = {
   subtitle: { enabled: true, font_family: 'Microsoft YaHei', font_size: 30, color: '#FFFFFF', position: 'bottom_center' as const },
   bgm: { enabled: false, bgm_id: null, custom_path: null, voice_volume: 1.0, bgm_volume: 0.5 },
   outputName: '',
-  currentStep: 0,
+  currentStep: 1,
 };
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
@@ -94,7 +94,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       subtitle: config.subtitle ?? DEFAULT_STATE.subtitle,
       bgm: config.bgm ?? DEFAULT_STATE.bgm,
       outputName: config.output_name ?? DEFAULT_STATE.outputName,
-      currentStep: 0,
+      currentStep: 1,
     });
   },
 }));

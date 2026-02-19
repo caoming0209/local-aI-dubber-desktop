@@ -11,11 +11,12 @@
     "allowJs": true,
     "jsx": "react-jsx",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@shared/*": ["../shared/*"]
     },
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "strict": true
   },
-  "include": ["src"]
+  "include": ["src", "../shared"]
 }
