@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git fetch:*)"
+      "Bash(git fetch:*)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File \".specify/scripts/powershell/create-new-feature.ps1\" -Json -Number 1 -ShortName \"ai-dubber-desktop\" \"AI数字人口播桌面客户端完整产品规格，包含8大核心模块：首页、单条制作、批量制作、数字人管理、音色管理、作品库、设置、帮助与反馈，全程本地离线运行，输入文字即可生成高清数字人口播视频\")",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File \".specify/scripts/powershell/setup-plan.ps1\" -Json)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File \".specify/scripts/powershell/update-agent-context.ps1\" -AgentType claude)",
+      "Bash(powershell -File:*)"
     ]
   }
 }

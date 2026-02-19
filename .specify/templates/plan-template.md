@@ -29,9 +29,18 @@
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+*关口：Phase 0 研究前必须通过；Phase 1 设计完成后重新核查。*
 
-[Gates determined based on constitution file]
+对照 `.specify/memory/constitution.md` 核查每项原则：
+
+| 检查项 | 状态 | 说明 |
+|--------|------|------|
+| 一、离线优先：核心功能无需联网 | PASS / FAIL | [说明] |
+| 二、双进程契约隔离：跨进程仅通过 HTTP+SSE 契约通信 | PASS / FAIL | [说明] |
+| 三、单一权威来源：每个数据域单一存储位置 | PASS / FAIL | [说明] |
+| 四、AI 代码生成友好性：技术选型权重 AI 生成质量 | PASS / FAIL | [说明] |
+| 五、匹配威胁模型的安全措施 | PASS / FAIL | [说明] |
+| 性能标准：关键操作满足响应时间目标 | PASS / FAIL | [说明] |
 
 ## Project Structure
 
@@ -96,9 +105,11 @@ directories captured above]
 
 ## Complexity Tracking
 
-> **Fill ONLY if Constitution Check has violations that must be justified**
+> **Fill for any architectural decision that adds dependencies, processes, or abstraction
+> layers beyond the minimum needed. Document the simpler alternative considered and why it
+> was insufficient (per Constitution Principle IV & Development Standards §5).**
 
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|-----------|------------|-------------------------------------|
+| Violation / Decision | Why Needed | Simpler Alternative Rejected Because |
+|----------------------|------------|-------------------------------------|
 | [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
 | [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |

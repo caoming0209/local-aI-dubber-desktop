@@ -1,4 +1,4 @@
-# CLAUDE.md
+﻿# CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -11,17 +11,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 技术栈
 
-- **前端**：Electron + Vue（桌面 UI 外壳）
+- **前端**：Electron + React 19 + Tailwind CSS（桌面 UI 外壳）
 - **核心引擎**：Python + FFmpeg（音视频处理流水线）
 - **口型同步**：Wav2Lip 模型（本地推理）
-- **语音合成**：本地 TTS 模型（输出 WAV）
+- **语音合成**：本地 TTS 模型 CosyVoice 2（输出 WAV）
 - **视频合成**：FFmpeg（合并音频、视频、字幕、背景音乐）
 
 ## 架构
 
 应用采用双进程架构：
-1. **Electron/Vue 前端** — UI 层，左侧固定菜单 + 右侧内容区布局
-2. **Python 后端** — 本地推理引擎，负责 TTS、口型同步（Wav2Lip）和 FFmpeg 视频合成
+1. **Electron + React 19 前端** — UI 层，左侧固定菜单 + 右侧内容区布局；状态管理：Zustand；路由：React Router v7（HashRouter）；图标：Lucide React；前端基于谷歌 AI 生成的初始项目（`D:\Git.Project\智影口播-·-ai数字人视频助手\`）继续开发
+2. **Python 后端** — 本地推理引擎，负责 TTS（CosyVoice 2）、口型同步（Wav2Lip）和 FFmpeg 视频合成
 
 ### 核心流水线（全程本地离线，不依赖云端）
 
