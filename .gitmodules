@@ -1,0 +1,6 @@
+[submodule "python-engine/third_party/CosyVoice"]
+	path = python-engine/third_party/CosyVoice
+	url = https://github.com/FunAudioLLM/CosyVoice.git
+[submodule "python-engine/third_party/Wav2Lip"]
+	path = python-engine/third_party/Wav2Lip
+	url = https://github.com/HassanMuhammadSannaullah/Wav2lip-Fix-For-Inference.git
