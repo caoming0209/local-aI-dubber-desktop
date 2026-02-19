@@ -1,7 +1,20 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:www.geeky-gadgets.com)",
+      "WebFetch(domain:den.dev)",
+      "WebFetch(domain:tessl.io)",
+      "WebFetch(domain:corti.com)",
+      "Bash(npm view:*)",
+      "Bash(export PATH=\"/c/Users/cm020/.local/bin:$PATH\")",
+      "Bash(spec-kit:*)",
+      "Read(//c/Users/cm020/.local/bin//**)",
+      "Bash(specify --help:*)",
+      "Bash(specify version)",
+      "Bash(specify check:*)"
     ]
   }
 }
