@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/constants.ts","./src/main.tsx","./src/types.ts","./src/components/layout.tsx","./src/components/sidebar.tsx","./src/pages/avatarmanager.tsx","./src/pages/batchcreation.tsx","./src/pages/home.tsx","./src/pages/settings.tsx","./src/pages/singlecreation.tsx","./src/pages/voicemanager.tsx","./src/pages/workslibrary.tsx"],"version":"5.8.3"}
