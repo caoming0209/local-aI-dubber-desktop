@@ -99,15 +99,16 @@ class ModelManager:
 
         Used before pipeline execution to ensure models are ready.
         Quick mode by default for fast startup checks (<200ms).
-        In dev mode, skip the check since engines use stubs.
+        In dev mode, missing models are not blocking (engines have fallbacks).
         """
         from src.utils.dev_mode import is_dev_mode
-        if is_dev_mode():
-            return ModelVerifyResult(True)
 
         # Check CosyVoice2 base model exists
         cosyvoice_dir = os.path.join(self.get_models_dir(), "cosyvoice2", "CosyVoice2-0.5B")
         if not os.path.isdir(cosyvoice_dir):
+            if is_dev_mode():
+                print("[model_manager] DEV mode: CosyVoice2 model not found, engines will use fallback")
+                return ModelVerifyResult(True)
             return ModelVerifyResult(
                 False, "MODEL_NOT_FOUND",
                 "CosyVoice2 基础模型未下载，请先下载 CosyVoice2-0.5B 模型。"
@@ -120,9 +121,15 @@ class ModelManager:
         ).fetchone()
 
         if not row:
+            if is_dev_mode():
+                print(f"[model_manager] DEV mode: voice {voice_id} not in DB, engine will use fallback")
+                return ModelVerifyResult(True)
             return ModelVerifyResult(False, "MODEL_NOT_FOUND", f"音色 {voice_id} 不存在")
 
         if row["download_status"] != "downloaded":
+            if is_dev_mode():
+                print(f"[model_manager] DEV mode: voice model not downloaded (status={row['download_status']}), engine will use fallback")
+                return ModelVerifyResult(True)
             return ModelVerifyResult(False, "MODEL_NOT_FOUND", f"音色模型未下载，当前状态: {row['download_status']}")
 
         model_path = row["model_path"]
@@ -140,15 +147,17 @@ class ModelManager:
         """Check if Wav2Lip model files are present.
 
         Checks for wav2lip_gan.pth in the wav2lip model directory.
+        In dev mode, missing models are not blocking (engines have fallbacks).
         """
         from src.utils.dev_mode import is_dev_mode
-        if is_dev_mode():
-            return ModelVerifyResult(True)
 
         wav2lip_dir = os.path.join(self.get_models_dir(), "wav2lip")
         checkpoint = os.path.join(wav2lip_dir, "wav2lip_gan.pth")
 
         if not os.path.isfile(checkpoint):
+            if is_dev_mode():
+                print("[model_manager] DEV mode: Wav2Lip model not found, engine will use fallback")
+                return ModelVerifyResult(True)
             return ModelVerifyResult(
                 False, "MODEL_NOT_FOUND",
                 "Wav2Lip 模型未找到，请下载 wav2lip_gan.pth 到模型目录。"

@@ -37,18 +37,16 @@ class VideoSynthesizer:
 
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
-        if is_dev_mode():
-            if lipsync_video_path and os.path.exists(lipsync_video_path):
-                import shutil
-                shutil.copy2(lipsync_video_path, output_path)
-            elif audio_path and os.path.exists(audio_path):
-                print(f"[synthesizer] DEV mode: creating placeholder video from audio")
-                self._create_placeholder_from_audio(output_path, audio_path)
-            else:
-                print(f"[synthesizer] DEV mode: creating minimal placeholder video")
-                self._create_minimal_placeholder(output_path)
-            print(f"[synthesizer] DEV stub output: {output_path}")
-            return output_path
+        if not lipsync_video_path or not os.path.exists(lipsync_video_path):
+            if is_dev_mode():
+                # Dev mode fallback: create placeholder when no lipsync video
+                if audio_path and os.path.exists(audio_path):
+                    print(f"[synthesizer] DEV fallback: creating placeholder video from audio")
+                    self._create_placeholder_from_audio(output_path, audio_path)
+                else:
+                    print(f"[synthesizer] DEV fallback: creating minimal placeholder video")
+                    self._create_minimal_placeholder(output_path)
+                return output_path
 
         if not lipsync_video_path or not os.path.exists(lipsync_video_path):
             raise RuntimeError(f"口型同步视频文件不存在: {lipsync_video_path or '(空路径)'}")
@@ -126,11 +124,6 @@ class VideoSynthesizer:
 
     def resample_audio(self, input_path: str, output_path: str, sample_rate: int = 16000) -> str:
         """Resample audio to target sample rate for Wav2Lip input."""
-        if is_dev_mode():
-            import shutil
-            shutil.copy2(input_path, output_path)
-            return output_path
-
         import subprocess
 
         cmd = [
@@ -145,25 +138,13 @@ class VideoSynthesizer:
 
     def extract_thumbnail(self, video_path: str, output_path: str) -> str:
         """Extract first frame as JPEG thumbnail."""
+        import subprocess
+
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
-        if is_dev_mode():
-            if video_path and os.path.exists(video_path):
-                import subprocess
-                cmd = [
-                    self._ffmpeg_path, "-y",
-                    "-i", video_path,
-                    "-vframes", "1",
-                    "-q:v", "2",
-                    output_path,
-                ]
-                subprocess.run(cmd, capture_output=True, timeout=10)
-                if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-                    return output_path
+        if not video_path or not os.path.exists(video_path):
             self._create_placeholder_thumbnail(output_path)
             return output_path
-
-        import subprocess
 
         cmd = [
             self._ffmpeg_path, "-y",
@@ -172,7 +153,10 @@ class VideoSynthesizer:
             "-q:v", "2",
             output_path,
         ]
-        subprocess.run(cmd, capture_output=True, check=True, timeout=10)
+        try:
+            subprocess.run(cmd, capture_output=True, check=True, timeout=10)
+        except Exception:
+            self._create_placeholder_thumbnail(output_path)
         return output_path
 
     def _create_placeholder_thumbnail(self, output_path: str) -> None:

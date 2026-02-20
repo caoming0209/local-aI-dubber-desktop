@@ -207,9 +207,10 @@ const SingleCreation: React.FC = () => {
                     )}
                     <button
                       type="button"
-                      title="试听音色"
+                      title={voice.download_status === 'downloaded' ? '试听音色' : '请先下载音色'}
                       onClick={(e) => { e.stopPropagation(); previewVoice(voice.id); }}
-                      className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:text-indigo-600 hover:border-indigo-300 hover:scale-110 transition-all"
+                      disabled={voice.download_status !== 'downloaded'}
+                      className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:text-indigo-600 hover:border-indigo-300 hover:scale-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
                     >
                       <Play size={14} fill="currentColor" />
                     </button>

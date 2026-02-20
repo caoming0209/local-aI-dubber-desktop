@@ -151,6 +151,9 @@ async def preview_voice(voice_id: str, body: dict):
     if not voice:
         return {"success": False, "error": {"code": "NOT_FOUND", "message": "音色不存在"}}
 
+    if voice.get("download_status") != "downloaded":
+        return {"success": False, "error": {"code": "MODEL_NOT_DOWNLOADED", "message": "请先下载该音色模型后再试听"}}
+
     text = body.get("text", "大家好，欢迎使用智影口播助手")
     speed = body.get("speed", 1.0)
     volume = body.get("volume", 1.0)
@@ -162,4 +165,5 @@ async def preview_voice(voice_id: str, body: dict):
         )
         return Response(content=audio_bytes, media_type="audio/wav")
     except Exception as e:
+        print(f"[voices] Preview failed for {voice_id}: {e}")
         return {"success": False, "error": {"code": "INTERNAL_ERROR", "message": str(e)}}

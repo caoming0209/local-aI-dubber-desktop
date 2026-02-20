@@ -72,12 +72,14 @@ class TTSEngine:
 
     def load_model(self, voice_id: str, model_path: str, device: Optional[str] = None) -> None:
         """Load TTS model for the given voice."""
-        if is_dev_mode():
-            self._device = device or "cpu"
-            print(f"[tts] DEV mode: skip model loading for voice {voice_id}")
-            return
         self._device = device or gpu_detector.get_inference_device()
-        self._ensure_model()
+        try:
+            self._ensure_model()
+        except Exception as e:
+            if is_dev_mode():
+                print(f"[tts] DEV mode: skip model loading ({e})")
+                return
+            raise
 
     def synthesize(
         self,
@@ -98,9 +100,14 @@ class TTSEngine:
         output_path = os.path.join(output_dir, f"tts_{uuid.uuid4().hex[:8]}.wav")
 
         if is_dev_mode():
-            self._create_placeholder_wav(output_path, duration=3.0)
-            print(f"[tts] DEV stub: {output_path}")
-            return output_path
+            # Dev mode: try real synthesis, fallback to placeholder if model unavailable
+            try:
+                self._ensure_model()
+            except Exception as e:
+                print(f"[tts] DEV mode: model not available ({e}), using placeholder")
+                self._create_placeholder_wav(output_path, duration=3.0)
+                print(f"[tts] DEV fallback: {output_path}")
+                return output_path
 
         self._ensure_model()
 
@@ -131,6 +138,7 @@ class TTSEngine:
         elif mode == "instruct2":
             prompt_wav_path = self._resolve_prompt_path(config["prompt_wav"])
             instruct_text = config["instruct_text"] or ""
+            print(f"[tts] Using prompt: {prompt_wav_path}, instruct: {instruct_text[:30]}...")
             for output in self._model.inference_instruct2(
                 text, instruct_text, prompt_wav_path, stream=False, speed=speed
             ):
@@ -178,9 +186,19 @@ class TTSEngine:
         return data
 
     def _resolve_prompt_path(self, relative_path: Optional[str]) -> str:
-        """Resolve prompt WAV path relative to model storage directory."""
+        """Resolve prompt WAV path relative to model storage directory.
+
+        Falls back to CosyVoice's default zero_shot_prompt.wav if custom prompt not found.
+        Ensures the prompt file is long enough for CosyVoice2 (at least 0.5 seconds).
+        """
+        default_prompt = os.path.join(
+            os.path.dirname(__file__), "..", "..", "third_party", "CosyVoice", "asset", "zero_shot_prompt.wav"
+        )
+        default_prompt = os.path.normpath(default_prompt)
+
         if not relative_path:
-            return ""
+            return default_prompt
+
         from src.storage.settings_store import settings_store
         settings = settings_store.read()
         base = settings.get("modelStoragePath", "")
@@ -190,7 +208,20 @@ class TTSEngine:
             )
         full_path = os.path.join(base, "cosyvoice2", relative_path)
         if not os.path.exists(full_path):
-            print(f"[tts] WARNING: Prompt WAV not found: {full_path}")
+            print(f"[tts] WARNING: Prompt WAV not found: {full_path}, using default prompt")
+            return default_prompt
+
+        try:
+            import torchaudio
+            waveform, sr = torchaudio.load(full_path)
+            duration = waveform.shape[1] / sr
+            if duration < 0.5:
+                print(f"[tts] WARNING: Prompt WAV too short ({duration:.2f}s), using default prompt")
+                return default_prompt
+        except Exception as e:
+            print(f"[tts] WARNING: Failed to check prompt WAV duration: {e}, using default prompt")
+            return default_prompt
+
         return full_path
 
     def unload_model(self) -> None:

@@ -66,7 +66,6 @@ export const useVoicesStore = create<VoicesState>((set, get) => ({
   },
 
   previewVoice: async (id, text) => {
-    // Preview returns audio/wav bytes — need to play directly
     const port = window.electronAPI?.getEnginePort() ?? 18432;
     try {
       const res = await fetch(`http://127.0.0.1:${port}/api/voices/${id}/preview`, {
@@ -75,14 +74,26 @@ export const useVoicesStore = create<VoicesState>((set, get) => ({
         body: JSON.stringify({ text: text ?? '大家好，欢迎使用智影口播助手' }),
       });
       if (res.ok) {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audio.play();
-        audio.onended = () => URL.revokeObjectURL(url);
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('audio/')) {
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const audio = new Audio(url);
+          audio.play();
+          audio.onended = () => URL.revokeObjectURL(url);
+        } else {
+          const data = await res.json();
+          if (!data.success && data.error) {
+            alert(data.error.message || '试听失败');
+          }
+        }
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error?.message || '试听失败，请稍后重试');
       }
-    } catch {
-      // Silently fail preview
+    } catch (err) {
+      console.error('[voices] Preview error:', err);
+      alert('试听失败，请检查网络连接');
     }
   },
 }));

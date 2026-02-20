@@ -117,12 +117,14 @@ class LipsyncEngine:
 
     def load_model(self, model_path: str, device: Optional[str] = None) -> None:
         """Load Wav2Lip model."""
-        if is_dev_mode():
-            self._device = device or "cpu"
-            print(f"[lipsync] DEV mode: skip model loading")
-            return
         self._device = device or gpu_detector.get_inference_device()
-        self._ensure_model()
+        try:
+            self._ensure_model()
+        except Exception as e:
+            if is_dev_mode():
+                print(f"[lipsync] DEV mode: skip model loading ({e})")
+                return
+            raise
 
     def process(
         self,
@@ -147,13 +149,18 @@ class LipsyncEngine:
         output_path = os.path.join(output_dir, f"lipsync_{uuid.uuid4().hex[:8]}.mp4")
 
         if is_dev_mode():
-            if video_path and os.path.exists(video_path):
-                shutil.copy2(video_path, output_path)
-            else:
-                print(f"[lipsync] DEV mode: creating placeholder video (no source video)")
-                self._create_placeholder_video(output_path, audio_path)
-            print(f"[lipsync] DEV stub: {output_path}")
-            return output_path
+            # Dev mode: try real lipsync, fallback to copy/placeholder if model unavailable
+            try:
+                self._ensure_model()
+            except Exception as e:
+                print(f"[lipsync] DEV mode: model not available ({e}), using fallback")
+                if video_path and os.path.exists(video_path):
+                    shutil.copy2(video_path, output_path)
+                else:
+                    print(f"[lipsync] DEV fallback: creating placeholder video (no source video)")
+                    self._create_placeholder_video(output_path, audio_path)
+                print(f"[lipsync] DEV fallback: {output_path}")
+                return output_path
 
         if not video_path or not os.path.exists(video_path):
             raise RuntimeError(f"数字人视频文件不存在: {video_path or '(空路径)'}")
@@ -180,6 +187,12 @@ class LipsyncEngine:
 
         if np.isnan(mel.reshape(-1)).sum() > 0:
             raise RuntimeError("音频 mel 频谱包含 NaN，请检查音频文件。")
+
+        # Pad mel if shorter than one chunk (avoids Conv kernel size error)
+        if mel.shape[1] < _MEL_STEP_SIZE:
+            pad_width = _MEL_STEP_SIZE - mel.shape[1]
+            mel = np.pad(mel, ((0, 0), (0, pad_width)), mode="constant", constant_values=0)
+            print(f"[lipsync] Mel padded from {mel.shape[1] - pad_width} to {mel.shape[1]} frames")
 
         # Split mel into chunks
         mel_chunks = []
