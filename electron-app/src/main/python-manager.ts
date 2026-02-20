@@ -121,7 +121,7 @@ export class PythonManager {
     if (app.isPackaged) {
       return path.join(process.resourcesPath, 'python-engine', 'server.exe');
     }
-    return 'python';
+    return path.join(__dirname, '..', '..', '..', 'python-engine', '.venv', 'Scripts', 'python.exe');
   }
 
   private getServerScript(): string {

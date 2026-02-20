@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useMemo } from 'react';
-import { Play, Pause, Volume2, VolumeX, Maximize, RotateCcw } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, RotateCcw, AlertCircle } from 'lucide-react';
 import { toLocalFileUrl } from '../services/engine';
 
 interface VideoPlayerProps {
@@ -16,8 +16,15 @@ export default function VideoPlayer({ src, poster, className = '', autoPlay = fa
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [showControls, setShowControls] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const videoSrc = useMemo(() => toLocalFileUrl(src), [src]);
+  const videoSrc = useMemo(() => {
+    const url = toLocalFileUrl(src);
+    console.log('[VideoPlayer] src:', src);
+    console.log('[VideoPlayer] videoSrc:', url);
+    return url;
+  }, [src]);
   const posterSrc = useMemo(() => toLocalFileUrl(poster), [poster]);
 
   useEffect(() => {
@@ -29,12 +36,32 @@ export default function VideoPlayer({ src, poster, className = '', autoPlay = fa
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
     const onEnded = () => setPlaying(false);
+    const onLoadedData = () => setLoading(false);
+    const onCanPlay = () => setLoading(false);
+    const onError = () => {
+      setLoading(false);
+      const mediaError = video.error;
+      if (mediaError) {
+        const errorMessages: Record<number, string> = {
+          1: '视频加载被中止',
+          2: '网络错误，无法加载视频',
+          3: '视频解码失败',
+          4: '视频格式不支持或文件不存在',
+        };
+        setError(errorMessages[mediaError.code] || `播放错误 (${mediaError.code})`);
+      } else {
+        setError('视频加载失败');
+      }
+    };
 
     video.addEventListener('timeupdate', onTimeUpdate);
     video.addEventListener('durationchange', onDurationChange);
     video.addEventListener('play', onPlay);
     video.addEventListener('pause', onPause);
     video.addEventListener('ended', onEnded);
+    video.addEventListener('loadeddata', onLoadedData);
+    video.addEventListener('canplay', onCanPlay);
+    video.addEventListener('error', onError);
 
     return () => {
       video.removeEventListener('timeupdate', onTimeUpdate);
@@ -42,6 +69,9 @@ export default function VideoPlayer({ src, poster, className = '', autoPlay = fa
       video.removeEventListener('play', onPlay);
       video.removeEventListener('pause', onPause);
       video.removeEventListener('ended', onEnded);
+      video.removeEventListener('loadeddata', onLoadedData);
+      video.removeEventListener('canplay', onCanPlay);
+      video.removeEventListener('error', onError);
     };
   }, []);
 
@@ -106,8 +136,24 @@ export default function VideoPlayer({ src, poster, className = '', autoPlay = fa
         onClick={togglePlay}
       />
 
+      {/* Error overlay */}
+      {error && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80">
+          <AlertCircle className="w-12 h-12 text-red-400 mb-3" />
+          <p className="text-white text-sm mb-2">{error}</p>
+          <p className="text-gray-400 text-xs max-w-xs text-center break-all">{src}</p>
+        </div>
+      )}
+
+      {/* Loading overlay */}
+      {loading && !error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+          <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        </div>
+      )}
+
       {/* Play overlay */}
-      {!playing && (
+      {!playing && !error && (
         <button
           onClick={togglePlay}
           className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity"

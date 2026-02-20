@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, dialog, protocol } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { PythonManager } from './python-manager';
@@ -17,16 +17,24 @@ protocol.registerSchemesAsPrivileged([
       supportFetchAPI: true,
       corsEnabled: true,
       bypassCSP: true,
+      stream: true,
     },
   },
 ]);
 
 function registerLocalFileProtocol(): void {
   protocol.handle('local-file', (request) => {
+    console.log('[protocol] Request URL:', request.url);
     const url = request.url.slice('local-file://'.length);
     try {
       const decodedPath = decodeURIComponent(url);
-      const file = fs.readFileSync(decodedPath);
+      console.log('[protocol] Decoded path:', decodedPath);
+      
+      if (!fs.existsSync(decodedPath)) {
+        console.error('[protocol] File not found:', decodedPath);
+        return new Response(null, { status: 404, statusText: 'File not found' });
+      }
+      
       const ext = path.extname(decodedPath).toLowerCase();
       const mimeTypes: Record<string, string> = {
         '.mp4': 'video/mp4',
@@ -37,8 +45,17 @@ function registerLocalFileProtocol(): void {
         '.gif': 'image/gif',
       };
       const mimeType = mimeTypes[ext] || 'application/octet-stream';
-      return new Response(file, {
-        headers: { 'Content-Type': mimeType },
+      console.log('[protocol] MIME type:', mimeType);
+      
+      const fileBuffer = fs.readFileSync(decodedPath);
+      console.log('[protocol] File size:', fileBuffer.length);
+      
+      return new Response(fileBuffer, {
+        headers: { 
+          'Content-Type': mimeType,
+          'Content-Length': fileBuffer.length.toString(),
+          'Accept-Ranges': 'bytes',
+        },
       });
     } catch (error) {
       console.error('[protocol] Failed to read file:', url, error);
@@ -59,13 +76,16 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      webSecurity: true,
+      webSecurity: false,
     },
     show: false,
   });
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
+    if (!app.isPackaged) {
+      mainWindow?.webContents.openDevTools();
+    }
   });
 
   if (!app.isPackaged) {

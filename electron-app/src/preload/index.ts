@@ -2,11 +2,9 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 function toLocalFileUrl(filePath: string): string {
   if (!filePath) return '';
-  if (filePath.startsWith('local-file://')) return filePath;
-  if (filePath.startsWith('file://')) {
-    return filePath.replace('file://', 'local-file://');
-  }
-  return `local-file://${encodeURIComponent(filePath)}`;
+  if (filePath.startsWith('file://')) return filePath;
+  const normalizedPath = filePath.replace(/\\/g, '/');
+  return `file:///${normalizedPath.replace(/^\/?/, '')}`;
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
