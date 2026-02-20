@@ -30,7 +30,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 架构
 
 应用采用双进程架构：
-1. **Electron + React 19 前端** — UI 层，左侧固定菜单 + 右侧内容区布局；前端基于谷歌 AI 生成的初始项目（`D:\Git.Project\智影口播-·-ai数字人视频助手\`）继续开发
+1. **Electron + React 19 前端** — UI 层，左侧固定菜单 + 右侧内容区布局；前端基于谷歌 AI 生成的初始项目继续开发
 2. **Python 后端** — 本地推理引擎，负责 TTS（CosyVoice 2）、口型同步（Wav2Lip）和 FFmpeg 视频合成
 
 ### IPC 通信模式

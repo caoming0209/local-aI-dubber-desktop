@@ -27,11 +27,15 @@ class TTSEngine:
     def _get_model_dir(self) -> str:
         """Resolve CosyVoice2 model directory from settings."""
         from src.storage.settings_store import settings_store
+
         settings = settings_store.read()
         base = settings.get("modelStoragePath", "")
         if not base:
             base = os.path.join(
-                os.path.expanduser("~"), "Documents", "local-aI-dubber-desktop", "models"
+                os.path.expanduser("~"),
+                "Documents",
+                "local-aI-dubber-desktop",
+                "models",
             )
         return os.path.join(base, "cosyvoice2", "CosyVoice2-0.5B")
 
@@ -66,9 +70,15 @@ class TTSEngine:
             from cosyvoice.cli.cosyvoice import CosyVoice2
 
             print(f"[tts] Loading CosyVoice2 model from {model_dir} on {self._device}")
-            self._model = CosyVoice2(model_dir)
+
+            # CosyVoice2 sometimes loads weights in BF16 (depending on checkpoints / env).
+            # If we don't enable mixed precision, BF16 weights + FP32 inputs can trigger matmul dtype mismatch.
+            fp16 = self._device == "cuda"
+            self._model = CosyVoice2(model_dir, fp16=fp16)
             self._model_dir = model_dir
-            print(f"[tts] Model loaded. Available speakers: {self._model.list_available_spks()}")
+            print(
+                f"[tts] Model loaded. Available speakers: {self._model.list_available_spks()}"
+            )
 
     def load_model(self, voice_id: str, model_path: str, device: Optional[str] = None) -> None:
         """Load TTS model for the given voice."""
@@ -80,6 +90,48 @@ class TTSEngine:
                 print(f"[tts] DEV mode: skip model loading ({e})")
                 return
             raise
+
+    def _prepare_tts_text(self, text: str, min_token_len: int = 60) -> str:
+        """Prepare TTS text so CosyVoice2 can handle very short scripts.
+
+        CosyVoice2's frontend has `token_min_n=60` in paragraph splitting.
+        Extremely short token sequences can trigger Conv1d kernel-size errors.
+
+        Strategy:
+        - Normalize with `split=False` to get a single string.
+        - If token length is too short, repeat the normalized text with Chinese comma.
+          Remove trailing sentence-ending punctuation before repeating to avoid creating
+          many tiny sentences.
+        """
+        safe_text = (text or "").strip()
+        if len(safe_text) < 4:
+            raise ValueError("文案太短，至少需要4个字符才能合成语音。")
+
+        # NOTE: Some text frontends (e.g. ttsfrd) may produce mojibake on Windows.
+        # Keep frontend normalization off to preserve original Unicode text.
+        normalized = self._model.frontend.text_normalize(
+            safe_text, split=False, text_frontend=False
+        )
+        normalized = (normalized or "").strip()
+        if not normalized:
+            raise ValueError("文案不能为空")
+
+        try:
+            _, text_len = self._model.frontend._extract_text_token(normalized)
+            token_len = int(text_len.item())
+        except Exception:
+            return normalized
+
+        if token_len <= 0 or token_len >= min_token_len:
+            return normalized
+
+        base = normalized.rstrip("。.!?！？")
+        if not base:
+            base = normalized
+
+        times = (min_token_len + token_len - 1) // token_len
+        expanded = "，".join([base] * times) + "。"
+        return expanded
 
     def synthesize(
         self,
@@ -120,32 +172,86 @@ class TTSEngine:
         # Collect all speech chunks from the generator
         speech_chunks = []
 
-        if mode == "sft":
-            speaker_id = config["speaker_id"]
-            for output in self._model.inference_sft(
-                text, speaker_id, stream=False, speed=speed
-            ):
-                speech_chunks.append(output["tts_speech"])
+        prompt_wav_path = None
+        prompt_text = None
+        instruct_text = None
 
-        elif mode == "zero_shot":
+        if mode in {"zero_shot", "instruct2"}:
             prompt_wav_path = self._resolve_prompt_path(config["prompt_wav"])
+
+        if mode == "zero_shot":
             prompt_text = config["prompt_text"] or ""
-            for output in self._model.inference_zero_shot(
-                text, prompt_text, prompt_wav_path, stream=False, speed=speed
-            ):
-                speech_chunks.append(output["tts_speech"])
+            prompt_text = self._model.frontend.text_normalize(
+                prompt_text, split=False, text_frontend=False
+            )
 
-        elif mode == "instruct2":
-            prompt_wav_path = self._resolve_prompt_path(config["prompt_wav"])
+        if mode == "instruct2":
             instruct_text = config["instruct_text"] or ""
-            print(f"[tts] Using prompt: {prompt_wav_path}, instruct: {instruct_text[:30]}...")
-            for output in self._model.inference_instruct2(
-                text, instruct_text, prompt_wav_path, stream=False, speed=speed
-            ):
-                speech_chunks.append(output["tts_speech"])
+            instruct_text = self._model.frontend.text_normalize(
+                instruct_text, split=False, text_frontend=False
+            )
+            print(
+                f"[tts] Using prompt: {prompt_wav_path}, instruct: {instruct_text[:30]}..."
+            )
 
-        else:
-            raise ValueError(f"Unknown TTS mode: {mode}")
+        def _run_inference(tts_text: str) -> None:
+            # Pass text_frontend=False to avoid CosyVoice doing its own split/segmenting.
+            # We already normalized + expanded short scripts in _prepare_tts_text().
+            if mode == "sft":
+                speaker_id = config["speaker_id"]
+                for output in self._model.inference_sft(
+                    tts_text,
+                    speaker_id,
+                    stream=False,
+                    speed=speed,
+                    text_frontend=False,
+                ):
+                    speech_chunks.append(output["tts_speech"])
+
+            elif mode == "zero_shot":
+                for output in self._model.inference_zero_shot(
+                    tts_text,
+                    prompt_text,
+                    prompt_wav_path,
+                    stream=False,
+                    speed=speed,
+                    text_frontend=False,
+                ):
+                    speech_chunks.append(output["tts_speech"])
+
+            elif mode == "instruct2":
+                for output in self._model.inference_instruct2(
+                    tts_text,
+                    instruct_text,
+                    prompt_wav_path,
+                    stream=False,
+                    speed=speed,
+                    text_frontend=False,
+                ):
+                    speech_chunks.append(output["tts_speech"])
+
+            else:
+                raise ValueError(f"Unknown TTS mode: {mode}")
+
+        try:
+            tts_text = self._prepare_tts_text(text, min_token_len=60)
+            _run_inference(tts_text)
+
+        except RuntimeError as e:
+            if "Kernel size can't be greater than actual input size" not in str(e):
+                raise
+
+            # Retry once by expanding more, keeping original content.
+            speech_chunks = []
+            tts_text = self._prepare_tts_text(text, min_token_len=120)
+            _run_inference(tts_text)
+
+        except ValueError as e:
+            if "prompt wav is too short" in str(e).lower():
+                raise ValueError(
+                    f"提示音频太短，无法生成语音。请使用至少 1 秒的音频文件。原始错误: {e}"
+                ) from e
+            raise
 
         if not speech_chunks:
             raise RuntimeError("TTS 合成失败：未生成任何语音数据")
@@ -163,8 +269,10 @@ class TTSEngine:
         # Save WAV
         torchaudio.save(output_path, speech, self._model.sample_rate)
 
-        print(f"[tts] Synthesized: {output_path} (voice={voice_id}, mode={mode}, "
-              f"speed={speed}, duration={speech.shape[1] / self._model.sample_rate:.1f}s)")
+        print(
+            f"[tts] Synthesized: {output_path} (voice={voice_id}, mode={mode}, "
+            f"speed={speed}, duration={speech.shape[1] / self._model.sample_rate:.1f}s)"
+        )
         return output_path
 
     def preview(
@@ -192,7 +300,13 @@ class TTSEngine:
         Ensures the prompt file is long enough for CosyVoice2 (at least 0.5 seconds).
         """
         default_prompt = os.path.join(
-            os.path.dirname(__file__), "..", "..", "third_party", "CosyVoice", "asset", "zero_shot_prompt.wav"
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "third_party",
+            "CosyVoice",
+            "asset",
+            "zero_shot_prompt.wav",
         )
         default_prompt = os.path.normpath(default_prompt)
 
@@ -200,12 +314,14 @@ class TTSEngine:
             return default_prompt
 
         from src.storage.settings_store import settings_store
+
         settings = settings_store.read()
         base = settings.get("modelStoragePath", "")
         if not base:
             base = os.path.join(
                 os.path.expanduser("~"), "Documents", "local-aI-dubber-desktop", "models"
             )
+
         full_path = os.path.join(base, "cosyvoice2", relative_path)
         if not os.path.exists(full_path):
             print(f"[tts] WARNING: Prompt WAV not found: {full_path}, using default prompt")
@@ -213,13 +329,18 @@ class TTSEngine:
 
         try:
             import torchaudio
+
             waveform, sr = torchaudio.load(full_path)
             duration = waveform.shape[1] / sr
             if duration < 0.5:
-                print(f"[tts] WARNING: Prompt WAV too short ({duration:.2f}s), using default prompt")
+                print(
+                    f"[tts] WARNING: Prompt WAV too short ({duration:.2f}s), using default prompt"
+                )
                 return default_prompt
         except Exception as e:
-            print(f"[tts] WARNING: Failed to check prompt WAV duration: {e}, using default prompt")
+            print(
+                f"[tts] WARNING: Failed to check prompt WAV duration: {e}, using default prompt"
+            )
             return default_prompt
 
         return full_path
@@ -232,6 +353,7 @@ class TTSEngine:
                 self._model = None
                 try:
                     import torch
+
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
                 except ImportError:
@@ -249,8 +371,8 @@ class TTSEngine:
             f.write(b"WAVE")
             f.write(b"fmt ")
             f.write(struct.pack("<I", 16))
-            f.write(struct.pack("<H", 1))   # PCM
-            f.write(struct.pack("<H", 1))   # mono
+            f.write(struct.pack("<H", 1))  # PCM
+            f.write(struct.pack("<H", 1))  # mono
             f.write(struct.pack("<I", sample_rate))
             f.write(struct.pack("<I", sample_rate * 2))
             f.write(struct.pack("<H", 2))

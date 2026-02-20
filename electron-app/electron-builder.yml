@@ -1,5 +1,5 @@
 appId: com.zhiying.koubo
-productName: 智影口播
+productName: local-aI-dubber-desktop
 copyright: Copyright © 2026
 
 directories:
@@ -36,7 +36,7 @@ nsis:
   installerHeaderIcon: assets/icon.ico
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: 智影口播
+  shortcutName: local-aI-dubber-desktop
   perMachine: false
   allowElevation: true
   installerSidebar: assets/installerSidebar.bmp

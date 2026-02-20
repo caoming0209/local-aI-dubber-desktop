@@ -68,10 +68,14 @@ export const useVoicesStore = create<VoicesState>((set, get) => ({
   previewVoice: async (id, text) => {
     const port = window.electronAPI?.getEnginePort() ?? 18432;
     try {
+      const body: any = {};
+      if (text) {
+        body.text = text;
+      }
       const res = await fetch(`http://127.0.0.1:${port}/api/voices/${id}/preview`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: text ?? '大家好，欢迎使用智影口播助手' }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         const contentType = res.headers.get('content-type') || '';

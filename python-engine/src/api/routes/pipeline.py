@@ -283,8 +283,8 @@ def _get_digital_human_video(dh_id: str) -> str:
 @router.post("/pipeline/single", status_code=202)
 async def create_single_job(body: dict):
     script = body.get("script", "").strip()
-    if not script or len(script) < 2:
-        return {"success": False, "error": {"code": "INVALID_SCRIPT", "message": "文案不能为空且至少2个字符"}}
+    if not script or len(script) < 4:
+        return {"success": False, "error": {"code": "INVALID_SCRIPT", "message": "文案不能为空且至少4个字符"}}
 
     # License check (skipped in dev mode)
     if not is_dev_mode():

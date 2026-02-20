@@ -28,11 +28,9 @@ cd local-aI-dubber-desktop
 
 ## 2. 前端环境（React 渲染进程）
 
-前端基于谷歌 AI 生成的初始项目，位于 `D:\Git.Project\智影口播-·-ai数字人视频助手\`。开发时将此目录作为渲染进程工作目录。
+前端基于谷歌 AI 生成的初始项目，位于 `local-aI-dubber-desktop/electron-app/`。开发时将此目录作为渲染进程工作目录。
 
 ```bash
-cd 智影口播-·-ai数字人视频助手
-
 # 安装依赖（补充 tailwindcss 和 zustand）
 npm install
 npm install tailwindcss @tailwindcss/vite zustand
@@ -135,7 +133,7 @@ pytest tests/
 python scripts/download_dev_models.py --models wav2lip,tts_male_basic
 
 # 模型存储位置（开发环境）
-# 默认: %USERPROFILE%\Documents\智影口播\models\
+# 默认: %USERPROFILE%\Documents\local-aI-dubber-desktop\models\
 ```
 
 ---

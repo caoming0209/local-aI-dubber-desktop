@@ -98,6 +98,14 @@ async def global_exception_handler(request: Request, exc: Exception):
 def main():
     import uvicorn
 
+    # Ensure UTF-8 console output on Windows (avoid garbled Chinese logs).
+    if sys.platform == "win32":
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+            sys.stderr.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
     port = find_free_port()
 
     # Signal readiness to Electron via stdout
