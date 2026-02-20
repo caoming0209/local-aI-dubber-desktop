@@ -30,6 +30,10 @@ def _new_job_id(prefix: str = "job") -> str:
 
 async def _run_single_pipeline(job_id: str, body: dict) -> None:
     """Execute the single video generation pipeline."""
+    from src.utils.dev_mode import is_dev_mode
+    print(f"[pipeline] Starting job {job_id}, dev_mode={is_dev_mode()}")
+    print(f"[pipeline] Request body: {body}")
+    
     emitter = job_manager.get_emitter(job_id)
     if not emitter:
         return
@@ -39,6 +43,7 @@ async def _run_single_pipeline(job_id: str, body: dict) -> None:
     if not save_dir:
         save_dir = os.path.join(os.path.expanduser("~"), "Documents", "local-aI-dubber-desktop", "works")
     os.makedirs(save_dir, exist_ok=True)
+    print(f"[pipeline] Save directory: {save_dir}")
 
     try:
         job_manager.update_state(job_id, status="running")
@@ -82,6 +87,7 @@ async def _run_single_pipeline(job_id: str, body: dict) -> None:
         job_manager.update_state(job_id, current_step="tts", step_index=2, progress=0.3)
 
         voice_params = body.get("voice_params", {})
+        print(f"[pipeline] TTS starting with voice_id={body.get('voice_id')}, params={voice_params}")
         tts_path = await asyncio.to_thread(
             tts_engine.synthesize,
             text=script,
@@ -90,10 +96,12 @@ async def _run_single_pipeline(job_id: str, body: dict) -> None:
             volume=voice_params.get("volume", 1.0),
             emotion=voice_params.get("emotion", 0.5),
         )
+        print(f"[pipeline] TTS output: {tts_path}, exists={os.path.exists(tts_path)}")
         await emitter.emit("tts", 2, 0.4, "语音合成完成")
 
         # Resample to 16kHz for Wav2Lip
         resampled_path = tts_path.replace(".wav", "_16k.wav")
+        print(f"[pipeline] Resampling to 16kHz: {resampled_path}")
         await asyncio.to_thread(
             video_synthesizer.resample_audio, tts_path, resampled_path, 16000
         )
@@ -105,9 +113,11 @@ async def _run_single_pipeline(job_id: str, body: dict) -> None:
         job_manager.update_state(job_id, current_step="lipsync", step_index=3, progress=0.5)
 
         dh_video = _get_digital_human_video(body.get("digital_human_id", ""))
+        print(f"[pipeline] Digital human video path: {dh_video}")
         lipsync_path = await asyncio.to_thread(
             lipsync_engine.process, dh_video, resampled_path
         )
+        print(f"[pipeline] Lipsync output path: {lipsync_path}")
         await emitter.emit("lipsync", 3, 0.7, "口型同步完成")
 
         # Step 4: Video synthesis
@@ -118,6 +128,7 @@ async def _run_single_pipeline(job_id: str, body: dict) -> None:
 
         output_name = body.get("output_name", f"video_{uuid.uuid4().hex[:6]}")
         output_path = os.path.join(save_dir, f"{output_name}.mp4")
+        print(f"[pipeline] Final output path: {output_path}")
 
         await asyncio.to_thread(
             video_synthesizer.synthesize,
@@ -129,6 +140,8 @@ async def _run_single_pipeline(job_id: str, body: dict) -> None:
             bgm=body.get("bgm"),
             aspect_ratio=body.get("aspect_ratio", "9:16"),
         )
+        print(f"[pipeline] Video synthesis completed, checking output...")
+        print(f"[pipeline] Output file exists: {os.path.exists(output_path)}, size: {os.path.getsize(output_path) if os.path.exists(output_path) else 0}")
 
         # Extract thumbnail
         thumb_dir = os.path.join(save_dir, ".thumbs")
@@ -191,12 +204,17 @@ async def _run_single_pipeline(job_id: str, body: dict) -> None:
         job_manager.update_state(job_id, status="completed", progress=1.0)
 
     except asyncio.CancelledError:
+        print(f"[pipeline] Job {job_id} cancelled")
         await emitter.emit("failed", 0, 0, "任务已取消", error={"code": "CANCELLED", "message": "任务已取消"})
         job_manager.update_state(job_id, status="cancelled")
     except _CancelledByUser:
+        print(f"[pipeline] Job {job_id} cancelled by user")
         await emitter.emit("failed", 0, 0, "任务已取消", error={"code": "CANCELLED", "message": "任务已取消"})
         job_manager.update_state(job_id, status="cancelled")
     except Exception as e:
+        import traceback
+        print(f"[pipeline] Job {job_id} failed with error: {e}")
+        traceback.print_exc()
         await emitter.emit("failed", 0, 0, str(e), error={"code": "INTERNAL_ERROR", "message": str(e)})
         job_manager.update_state(job_id, status="failed")
     finally:
@@ -225,14 +243,39 @@ async def _wait_if_paused(job_id: str) -> None:
 def _get_digital_human_video(dh_id: str) -> str:
     """Get digital human video path from database. Returns placeholder if not found."""
     from src.storage.database import get_connection
+    
+    if not dh_id:
+        if is_dev_mode():
+            return ""
+        raise RuntimeError("未选择数字人，请先选择一个数字人形象")
+    
     conn = get_connection()
     row = conn.execute(
         "SELECT preview_video_path, adapted_video_path FROM digital_humans WHERE id = ?",
         (dh_id,),
     ).fetchone()
-    if row:
-        return row["adapted_video_path"] or row["preview_video_path"]
-    return ""
+    
+    if not row:
+        if is_dev_mode():
+            return ""
+        raise RuntimeError(f"数字人不存在: {dh_id}")
+    
+    video_path = row["adapted_video_path"] or row["preview_video_path"]
+    
+    if not video_path:
+        if is_dev_mode():
+            return ""
+        raise RuntimeError(
+            "数字人视频文件未配置。请上传数字人视频或等待视频适配完成。\n"
+            "提示：当前为演示模式，请上传自定义数字人视频后再生成。"
+        )
+    
+    if not os.path.exists(video_path):
+        if is_dev_mode():
+            return ""
+        raise RuntimeError(f"数字人视频文件不存在: {video_path}")
+    
+    return video_path
 
 
 # ─── Route handlers ──────────────────────────────────────────────
