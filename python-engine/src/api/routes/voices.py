@@ -154,7 +154,7 @@ async def preview_voice(voice_id: str, body: dict):
     if voice.get("download_status") != "downloaded":
         return {"success": False, "error": {"code": "MODEL_NOT_DOWNLOADED", "message": "请先下载该音色模型后再试听"}}
 
-    text = body.get("text", "欢迎使用智影口播助手。本工具致力于为您提供智能、流畅、高质感的口播体验，助力您快速打造优质音频与视频内容，提升创作效率。")
+    text = body.get("text", "欢迎使用智影口播助手，本工具致力于为您提供智能、流畅、高质感的口播体验，助力您快速打造优质音频与视频内容，提升创作效率。")
     speed = body.get("speed", 1.0)
     volume = body.get("volume", 1.0)
     emotion = body.get("emotion", 0.5)

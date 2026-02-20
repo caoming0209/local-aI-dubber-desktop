@@ -433,7 +433,7 @@ data: {"status": "error", "message": "下载失败，请检查网络连接"}
 ### POST /api/voices/{id}/preview
 实时合成预览音频。
 
-**Request**: `{"text": "欢迎使用智影口播助手。本工具致力于为您提供智能、流畅、高质感的口播体验，助力您快速打造优质音频与视频内容，提升创作效率。", "speed": 1.0, "volume": 1.0, "emotion": 0.5}`
+**Request**: `{"text": "欢迎使用智影口播助手，本工具致力于为您提供智能、流畅、高质感的口播体验，助力您快速打造优质音频与视频内容，提升创作效率。", "speed": 1.0, "volume": 1.0, "emotion": 0.5}`
 **Response**: audio/wav 二进制流（或 Base64 编码 JSON）
 
 ---

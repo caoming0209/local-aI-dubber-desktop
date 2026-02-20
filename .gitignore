@@ -57,5 +57,3 @@ python-engine/%USERPROFILE%/
 *.tmp
 *.bak
 
-# Third party libraries
-python-engine/third_party/
