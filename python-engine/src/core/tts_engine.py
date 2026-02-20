@@ -31,7 +31,7 @@ class TTSEngine:
         base = settings.get("modelStoragePath", "")
         if not base:
             base = os.path.join(
-                os.path.expanduser("~"), "Documents", "智影口播", "models"
+                os.path.expanduser("~"), "Documents", "local-aI-dubber-desktop", "models"
             )
         return os.path.join(base, "cosyvoice2", "CosyVoice2-0.5B")
 
@@ -186,7 +186,7 @@ class TTSEngine:
         base = settings.get("modelStoragePath", "")
         if not base:
             base = os.path.join(
-                os.path.expanduser("~"), "Documents", "智影口播", "models"
+                os.path.expanduser("~"), "Documents", "local-aI-dubber-desktop", "models"
             )
         full_path = os.path.join(base, "cosyvoice2", relative_path)
         if not os.path.exists(full_path):

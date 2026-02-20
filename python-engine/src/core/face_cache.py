@@ -23,7 +23,7 @@ class FaceCache:
         base = settings.get("defaultVideoSavePath", "")
         if not base:
             base = os.path.join(
-                os.path.expanduser("~"), "Documents", "智影口播", "作品"
+                os.path.expanduser("~"), "Documents", "local-aI-dubber-desktop", "works"
             )
         self._cache_dir = os.path.join(base, ".face_cache")
         os.makedirs(self._cache_dir, exist_ok=True)

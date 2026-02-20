@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Video, Layers, Film, PlayCircle, Clock, ChevronRight, BookOpen } from 'lucide-react';
 import { RoutePath } from '../types';
 import { useWorksStore } from '../stores/works';
+import { toLocalFileUrl } from '../services/engine';
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
@@ -92,7 +93,7 @@ const Home: React.FC = () => {
               <div key={work.id} className="p-4 flex items-center hover:bg-slate-50 transition-colors group cursor-pointer active:bg-slate-100">
                 <div className="relative w-24 h-14 rounded-md overflow-hidden bg-slate-200 flex-shrink-0 group-hover:ring-2 ring-indigo-100 transition-all">
                   {work.thumbnail_path ? (
-                    <img src={`file://${work.thumbnail_path}`} alt={work.name} className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500" />
+                    <img src={toLocalFileUrl(work.thumbnail_path)} alt={work.name} className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-slate-300">
                       <PlayCircle size={20} />

@@ -1,11 +1,51 @@
-import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, dialog, protocol } from 'electron';
 import path from 'path';
+import fs from 'fs';
 import { PythonManager } from './python-manager';
 import { setupIpcBridge } from './ipc-bridge';
 import { setupAutoUpdater } from './updater';
 
 const pythonManager = new PythonManager();
 let mainWindow: BrowserWindow | null = null;
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'local-file',
+    privileges: {
+      secure: true,
+      standard: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      bypassCSP: true,
+    },
+  },
+]);
+
+function registerLocalFileProtocol(): void {
+  protocol.handle('local-file', (request) => {
+    const url = request.url.slice('local-file://'.length);
+    try {
+      const decodedPath = decodeURIComponent(url);
+      const file = fs.readFileSync(decodedPath);
+      const ext = path.extname(decodedPath).toLowerCase();
+      const mimeTypes: Record<string, string> = {
+        '.mp4': 'video/mp4',
+        '.webm': 'video/webm',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.gif': 'image/gif',
+      };
+      const mimeType = mimeTypes[ext] || 'application/octet-stream';
+      return new Response(file, {
+        headers: { 'Content-Type': mimeType },
+      });
+    } catch (error) {
+      console.error('[protocol] Failed to read file:', url, error);
+      return new Response(null, { status: 404 });
+    }
+  });
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -19,6 +59,7 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      webSecurity: true,
     },
     show: false,
   });
@@ -53,6 +94,7 @@ async function startEngine(): Promise<void> {
 }
 
 app.whenReady().then(async () => {
+  registerLocalFileProtocol();
   createWindow();
   setupIpcBridge(pythonManager, mainWindow!);
   if (app.isPackaged) {

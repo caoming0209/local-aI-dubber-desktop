@@ -1,5 +1,6 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import { Play, Pause, Volume2, VolumeX, Maximize, RotateCcw } from 'lucide-react';
+import { toLocalFileUrl } from '../services/engine';
 
 interface VideoPlayerProps {
   src: string;
@@ -15,6 +16,9 @@ export default function VideoPlayer({ src, poster, className = '', autoPlay = fa
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [showControls, setShowControls] = useState(true);
+
+  const videoSrc = useMemo(() => toLocalFileUrl(src), [src]);
+  const posterSrc = useMemo(() => toLocalFileUrl(poster), [poster]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -95,8 +99,8 @@ export default function VideoPlayer({ src, poster, className = '', autoPlay = fa
     >
       <video
         ref={videoRef}
-        src={src}
-        poster={poster}
+        src={videoSrc}
+        poster={posterSrc}
         autoPlay={autoPlay}
         className="w-full h-full object-contain"
         onClick={togglePlay}

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Plus, Search, Star, Trash2, Users, RefreshCw } from 'lucide-react';
 import { useDigitalHumansStore } from '../stores/digitalHumans';
+import { toLocalFileUrl } from '../services/engine';
 
 const AvatarManager: React.FC = () => {
   const { items, loading, loadDigitalHumans, toggleFavorite, deleteDigitalHuman, uploadDigitalHuman } = useDigitalHumansStore();
@@ -97,7 +98,7 @@ const AvatarManager: React.FC = () => {
             <div key={avatar.id} className="group relative bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
               <div className="aspect-[3/4] relative overflow-hidden bg-slate-100">
                 {avatar.thumbnail_path ? (
-                  <img src={`file://${avatar.thumbnail_path}`} alt={avatar.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  <img src={toLocalFileUrl(avatar.thumbnail_path)} alt={avatar.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-slate-300"><Users size={32} /></div>
                 )}

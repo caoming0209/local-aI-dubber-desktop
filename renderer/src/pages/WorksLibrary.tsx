@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { PlayCircle, FolderOpen, Trash2, Edit, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PlayCircle, FolderOpen, Trash2, Edit, Search, Filter, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useWorksStore } from '../stores/works';
-import type { AspectRatio } from '@shared/ipc-types';
+import { toLocalFileUrl } from '../services/engine';
+import VideoPlayer from '../components/VideoPlayer';
+import type { AspectRatio, Work } from '@shared/ipc-types';
 
 const WorksLibrary: React.FC = () => {
   const { works, total, page, totalPages, loading, loadWorks, deleteWork, renameWork } = useWorksStore();
   const [search, setSearch] = useState('');
   const [aspectFilter, setAspectFilter] = useState<string>('');
   const [sortBy, setSortBy] = useState('created_at_desc');
+  const [playingWork, setPlayingWork] = useState<Work | null>(null);
 
   useEffect(() => {
     loadWorks();
@@ -37,6 +40,20 @@ const WorksLibrary: React.FC = () => {
   const handleOpenFolder = () => {
     if (window.electronAPI) {
       window.electronAPI.system.selectDirectory();
+    }
+  };
+
+  const handlePlay = (work: Work) => {
+    setPlayingWork(work);
+  };
+
+  const handleClosePlayer = () => {
+    setPlayingWork(null);
+  };
+
+  const handleOpenFileLocation = (filePath: string) => {
+    if (window.electronAPI) {
+      window.electronAPI.system.showItemInFolder(filePath);
     }
   };
 
@@ -110,15 +127,18 @@ const WorksLibrary: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {works.map((work) => (
             <div key={work.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden group hover:shadow-lg hover:border-indigo-200 hover:-translate-y-1 transition-all duration-300">
-              <div className="aspect-video relative bg-slate-100 overflow-hidden">
+              <div 
+                className="aspect-video relative bg-slate-100 overflow-hidden cursor-pointer"
+                onClick={() => handlePlay(work)}
+              >
                 {work.thumbnail_path ? (
-                  <img src={`file://${work.thumbnail_path}`} alt={work.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                  <img src={toLocalFileUrl(work.thumbnail_path)} alt={work.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-slate-300">
                     <PlayCircle size={48} />
                   </div>
                 )}
-                <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer duration-300">
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                   <PlayCircle size={48} className="text-white drop-shadow-lg hover:scale-110 transition-transform" />
                 </div>
                 <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] px-1.5 py-0.5 rounded">
@@ -175,6 +195,39 @@ const WorksLibrary: React.FC = () => {
             <ChevronRight size={16} />
           </button>
           <span className="text-xs text-slate-400 ml-2">共 {total} 条</span>
+        </div>
+      )}
+
+      {/* Video Player Modal */}
+      {playingWork && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="relative w-full max-w-4xl mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-white text-lg font-bold truncate">{playingWork.name}</h2>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleOpenFileLocation(playingWork.file_path)}
+                  className="text-white/70 hover:text-white text-sm flex items-center gap-1 px-3 py-1.5 bg-white/10 rounded-lg hover:bg-white/20 transition-all"
+                >
+                  <FolderOpen size={16} /> 打开位置
+                </button>
+                <button
+                  onClick={handleClosePlayer}
+                  className="text-white/70 hover:text-white p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            <div className={`${playingWork.aspect_ratio === '9:16' ? 'max-h-[80vh] w-auto mx-auto' : 'w-full'}`}>
+              <VideoPlayer
+                src={playingWork.file_path}
+                poster={playingWork.thumbnail_path}
+                className="rounded-lg shadow-2xl"
+                autoPlay={true}
+              />
+            </div>
+          </div>
         </div>
       )}
     </div>

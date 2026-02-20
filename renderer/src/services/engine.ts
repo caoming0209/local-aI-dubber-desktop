@@ -35,6 +35,16 @@ function getDevPort(): number {
   return 18432;
 }
 
+export function toLocalFileUrl(filePath: string | undefined | null): string {
+  if (!filePath) return '';
+  if (typeof window !== 'undefined' && window.electronAPI?.toLocalFileUrl) {
+    return window.electronAPI.toLocalFileUrl(filePath);
+  }
+  // Fallback for browser dev mode
+  if (filePath.startsWith('file://')) return filePath;
+  return `file://${filePath}`;
+}
+
 export const api = {
   get: <T = unknown>(path: string) => request<T>('GET', path),
   post: <T = unknown>(path: string, body?: object) => request<T>('POST', path, body),

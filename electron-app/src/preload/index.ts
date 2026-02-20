@@ -1,5 +1,14 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+function toLocalFileUrl(filePath: string): string {
+  if (!filePath) return '';
+  if (filePath.startsWith('local-file://')) return filePath;
+  if (filePath.startsWith('file://')) {
+    return filePath.replace('file://', 'local-file://');
+  }
+  return `local-file://${encodeURIComponent(filePath)}`;
+}
+
 contextBridge.exposeInMainWorld('electronAPI', {
   engine: {
     request(method: string, path: string, body?: object) {
@@ -51,5 +60,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   getEnginePort() {
     return ipcRenderer.sendSync('engine:getPort');
+  },
+
+  toLocalFileUrl(filePath: string): string {
+    return toLocalFileUrl(filePath);
   },
 });

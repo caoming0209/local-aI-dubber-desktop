@@ -24,7 +24,7 @@ class ModelManager:
         settings = settings_store.read()
         models_dir = settings.get("modelStoragePath", "")
         if not models_dir:
-            models_dir = str(Path.home() / "Documents" / "智影口播" / "models")
+            models_dir = str(Path.home() / "Documents" / "local-aI-dubber-desktop" / "models")
         os.makedirs(models_dir, exist_ok=True)
         return models_dir
 

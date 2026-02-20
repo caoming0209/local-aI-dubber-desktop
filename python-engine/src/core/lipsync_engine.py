@@ -40,7 +40,7 @@ class LipsyncEngine:
         base = settings.get("modelStoragePath", "")
         if not base:
             base = os.path.join(
-                os.path.expanduser("~"), "Documents", "智影口播", "models"
+                os.path.expanduser("~"), "Documents", "local-aI-dubber-desktop", "models"
             )
         return os.path.join(base, "wav2lip")
 
@@ -147,13 +147,16 @@ class LipsyncEngine:
         output_path = os.path.join(output_dir, f"lipsync_{uuid.uuid4().hex[:8]}.mp4")
 
         if is_dev_mode():
-            if os.path.exists(video_path):
+            if video_path and os.path.exists(video_path):
                 shutil.copy2(video_path, output_path)
             else:
-                with open(output_path, "wb") as f:
-                    f.write(b"")
+                print(f"[lipsync] DEV mode: creating placeholder video (no source video)")
+                self._create_placeholder_video(output_path, audio_path)
             print(f"[lipsync] DEV stub: {output_path}")
             return output_path
+
+        if not video_path or not os.path.exists(video_path):
+            raise RuntimeError(f"数字人视频文件不存在: {video_path or '(空路径)'}")
 
         self._ensure_model()
 
@@ -404,6 +407,31 @@ class LipsyncEngine:
             if result.returncode != 0:
                 print(f"[lipsync] FFmpeg mux error: {result.stderr[:500]}")
                 raise RuntimeError(f"FFmpeg 合成失败: {result.stderr[:200]}")
+        except FileNotFoundError:
+            raise RuntimeError("FFmpeg 未找到，请安装 FFmpeg 并添加到 PATH。")
+
+    def _create_placeholder_video(self, output_path: str, audio_path: str) -> None:
+        """Create a placeholder video with audio for dev mode testing."""
+        import subprocess
+
+        cmd = [
+            "ffmpeg", "-y",
+            "-f", "lavfi", "-i", "color=c=gray:s=1080x1920:d=5:r=25",
+            "-i", audio_path,
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-crf", "28",
+            "-c:a", "aac",
+            "-b:a", "128k",
+            "-pix_fmt", "yuv420p",
+            "-shortest",
+            output_path,
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            if result.returncode != 0:
+                print(f"[lipsync] FFmpeg placeholder error: {result.stderr[:500]}")
+                raise RuntimeError(f"创建占位视频失败: {result.stderr[:200]}")
         except FileNotFoundError:
             raise RuntimeError("FFmpeg 未找到，请安装 FFmpeg 并添加到 PATH。")
 

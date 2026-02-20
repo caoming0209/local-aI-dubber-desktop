@@ -333,6 +333,7 @@ export interface ElectronAPI {
     selectFile(filters: FileFilter[]): Promise<string | null>;
   };
   getEnginePort(): number;
+  toLocalFileUrl(filePath: string): string;
 }
 
 declare global {

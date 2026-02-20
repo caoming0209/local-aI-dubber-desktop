@@ -1,6 +1,6 @@
 """AES-256-GCM encrypted license state storage.
 
-License file: {APPDATA}/ZhiYingKouBo/license.dat
+License file: {APPDATA}/local-aI-dubber-desktop/license.dat
 Key derived from device fingerprint via PBKDF2.
 """
 
@@ -27,7 +27,7 @@ def _derive_key(fingerprint: str) -> bytes:
 
 def _get_license_path() -> str:
     user_data = os.environ.get("APPDATA", os.path.expanduser("~"))
-    license_dir = os.path.join(user_data, "ZhiYingKouBo")
+    license_dir = os.path.join(user_data, "local-aI-dubber-desktop")
     os.makedirs(license_dir, exist_ok=True)
     return os.path.join(license_dir, "license.dat")
 

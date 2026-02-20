@@ -16,7 +16,7 @@ import { RoutePath, Step } from '../types';
 import { useProjectStore } from '../stores/project';
 import { useDigitalHumansStore } from '../stores/digitalHumans';
 import { useVoicesStore } from '../stores/voices';
-import { api } from '../services/engine';
+import { api, toLocalFileUrl } from '../services/engine';
 import { subscribeProgress } from '../services/pipeline';
 import type { SingleProgressEvent, PipelineJobResponse } from '@shared/ipc-types';
 
@@ -270,7 +270,7 @@ const SingleCreation: React.FC = () => {
                   }`}
                 >
                   {avatar.thumbnail_path ? (
-                    <img src={`file://${avatar.thumbnail_path}`} alt={avatar.name} className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500" />
+                    <img src={toLocalFileUrl(avatar.thumbnail_path)} alt={avatar.name} className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500" />
                   ) : (
                     <div className="w-full h-full bg-slate-200 flex items-center justify-center text-slate-400">
                       <Users size={32} />
@@ -491,7 +491,7 @@ const SingleCreation: React.FC = () => {
         <div className="relative w-[320px] h-[568px] bg-black rounded-[32px] shadow-2xl overflow-hidden border-8 border-slate-800 ring-4 ring-slate-200/50">
           <div className="absolute inset-0 z-0 bg-slate-900 flex items-center justify-center">
             {currentAvatar?.thumbnail_path ? (
-              <img src={`file://${currentAvatar.thumbnail_path}`} alt="Avatar" className="w-full h-full object-cover opacity-90" />
+              <img src={toLocalFileUrl(currentAvatar.thumbnail_path)} alt="Avatar" className="w-full h-full object-cover opacity-90" />
             ) : (
               <div className="text-slate-500 flex flex-col items-center">
                 <Users size={32} className="mb-2 opacity-50" />

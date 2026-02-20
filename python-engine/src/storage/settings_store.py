@@ -10,12 +10,12 @@ from typing import Any
 DEFAULT_SETTINGS: dict[str, Any] = {
     "autoStartOnBoot": False,
     "defaultVideoSavePath": str(
-        Path.home() / "Documents" / "智影口播" / "作品"
+        Path.home() / "Documents" / "local-aI-dubber-desktop" / "works"
     ),
     "theme": "light",
     "language": "zh-CN",
     "modelStoragePath": str(
-        Path.home() / "Documents" / "智影口播" / "models"
+        Path.home() / "Documents" / "local-aI-dubber-desktop" / "models"
     ),
     "downloadSpeedLimitKBps": 0,
     "autoDownloadModels": True,
@@ -34,7 +34,7 @@ class SettingsStore:
             self._path = settings_path
         else:
             user_data = os.environ.get("APPDATA", os.path.expanduser("~"))
-            settings_dir = os.path.join(user_data, "ZhiYingKouBo")
+            settings_dir = os.path.join(user_data, "local-aI-dubber-desktop")
             os.makedirs(settings_dir, exist_ok=True)
             self._path = os.path.join(settings_dir, "settings.json")
 
@@ -44,7 +44,6 @@ class SettingsStore:
         """Create settings file with defaults if it doesn't exist."""
         if not os.path.exists(self._path):
             self._write(DEFAULT_SETTINGS.copy())
-            # Ensure default directories exist
             for key in ("defaultVideoSavePath", "modelStoragePath"):
                 path = DEFAULT_SETTINGS[key]
                 os.makedirs(path, exist_ok=True)
@@ -75,5 +74,4 @@ class SettingsStore:
         return current
 
 
-# Global singleton
 settings_store = SettingsStore()

@@ -37,7 +37,7 @@ async def _run_single_pipeline(job_id: str, body: dict) -> None:
     settings = settings_store.read()
     save_dir = settings.get("defaultVideoSavePath", "")
     if not save_dir:
-        save_dir = os.path.join(os.path.expanduser("~"), "Documents", "智影口播", "作品")
+        save_dir = os.path.join(os.path.expanduser("~"), "Documents", "local-aI-dubber-desktop", "works")
     os.makedirs(save_dir, exist_ok=True)
 
     try:
@@ -386,7 +386,7 @@ async def _run_batch_pipeline(job_id: str, body: dict) -> None:
                 await emitter.emit_batch("batch_item_progress", item_index=i, step="synthesis", progress=0.9)
                 batch_save_dir = settings.get("defaultVideoSavePath", "")
                 if not batch_save_dir:
-                    batch_save_dir = os.path.join(os.path.expanduser("~"), "Documents", "智影口播", "作品")
+                    batch_save_dir = os.path.join(os.path.expanduser("~"), "Documents", "local-aI-dubber-desktop", "works")
                 os.makedirs(batch_save_dir, exist_ok=True)
                 out_name = single_body["output_name"]
                 out_path = os.path.join(batch_save_dir, f"{out_name}.mp4")
