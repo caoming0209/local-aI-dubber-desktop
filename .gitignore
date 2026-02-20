@@ -50,6 +50,9 @@ python-engine/dist/
 python-engine/build/
 *.spec
 
+# Local user profile
+python-engine/%USERPROFILE%/
+
 # Temporary files
 *.tmp
 *.bak
