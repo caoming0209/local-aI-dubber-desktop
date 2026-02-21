@@ -331,7 +331,9 @@ class TTSEngine:
 
         print(
             f"[tts] Synthesized: {output_path} (voice={voice_id}, mode={mode}, "
-            f"speed={speed}, duration={speech.shape[1] / self._model.sample_rate:.1f}s)"
+            f"speed={speed}, duration={speech.shape[1] / self._model.sample_rate:.1f}s)",
+            file=sys.stderr,
+            flush=True,
         )
         return output_path
 
