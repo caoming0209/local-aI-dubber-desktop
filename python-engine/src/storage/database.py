@@ -20,8 +20,8 @@ def get_db_path() -> str:
     global _db_path
     if _db_path:
         return _db_path
-    user_data = os.environ.get("APPDATA", os.path.expanduser("~"))
-    db_dir = os.path.join(user_data, "local-aI-dubber-desktop")
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    db_dir = os.path.join(project_root, "data")
     os.makedirs(db_dir, exist_ok=True)
     _db_path = os.path.join(db_dir, "dubber.db")
     return _db_path
