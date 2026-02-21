@@ -281,8 +281,17 @@ class TTSEngine:
 
         try:
             tts_text = self._prepare_tts_text(text, min_token_len=60)
-            print(f"[tts] Text to synthesize (repr): {repr(tts_text[:100])}", flush=True)
-            print(f"[tts] Text to synthesize (head): {tts_text[:100]}", flush=True)
+
+            # Print as unicode_escape so logs are stable even if the console ends up
+            # using a non-UTF8 codepage.
+            _head = tts_text[:100]
+            _head_escape = _head.encode("unicode_escape", errors="backslashreplace").decode("ascii")
+            print(
+                f"[tts] Text to synthesize (unicode_escape): {_head_escape}",
+                file=sys.stderr,
+                flush=True,
+            )
+
             _run_inference(tts_text)
 
         except RuntimeError as e:
@@ -315,7 +324,10 @@ class TTSEngine:
         speech = torch.clamp(speech, -1.0, 1.0)
 
         # Save WAV
-        torchaudio.save(output_path, speech, self._model.sample_rate)
+        # Many Windows players / browser audio decoders behave poorly with
+        # 32-bit float WAV (pcm_f32le). Convert to signed 16-bit PCM.
+        speech_i16 = (speech * 32767.0).to(torch.int16)
+        torchaudio.save(output_path, speech_i16, self._model.sample_rate, encoding="PCM_S", bits_per_sample=16)
 
         print(
             f"[tts] Synthesized: {output_path} (voice={voice_id}, mode={mode}, "
