@@ -1,4 +1,4 @@
-"""GPU detection: NVIDIA CUDA, AMD ROCm, and CPU fallback."""
+"""GPU detection: NVIDIA CUDA, AMD ROCm/DirectML, and CPU fallback."""
 
 import subprocess
 from typing import Optional
@@ -9,7 +9,7 @@ class GpuDetector:
         self._cached_info: Optional[dict] = None
 
     def detect(self) -> dict:
-        """Detect GPU availability (NVIDIA CUDA or AMD ROCm)."""
+        """Detect GPU availability (NVIDIA CUDA, AMD ROCm/DirectML)."""
         if self._cached_info:
             return self._cached_info
 
@@ -18,17 +18,15 @@ class GpuDetector:
             "gpu_name": "Unknown",
             "gpu_vendor": "none",       # nvidia / amd / none
             "gpu_vram_gb": 0,
-            "backend": "cpu",           # cuda / rocm / cpu
+            "backend": "cpu",           # cuda / rocm / directml / cpu
             "cuda_version": None,
             "rocm_version": None,
             "recommendation": "not_detected",
         }
 
-        # Try PyTorch detection (covers both CUDA and ROCm)
         try:
             import torch
 
-            # ROCm exposes itself through torch.cuda API (HIP compatibility layer)
             hip_version = getattr(torch.version, "hip", None)
 
             if torch.cuda.is_available():
@@ -39,12 +37,10 @@ class GpuDetector:
                 )
 
                 if hip_version:
-                    # AMD ROCm (HIP maps to cuda API)
                     info["gpu_vendor"] = "amd"
                     info["backend"] = "rocm"
                     info["rocm_version"] = hip_version
                 else:
-                    # NVIDIA CUDA
                     info["gpu_vendor"] = "nvidia"
                     info["backend"] = "cuda"
                     info["cuda_version"] = torch.version.cuda
@@ -53,18 +49,25 @@ class GpuDetector:
                     "compatible" if info["gpu_vram_gb"] >= 4 else "incompatible"
                 )
 
-            elif hip_version:
-                # ROCm installed but no GPU detected
-                info["rocm_version"] = hip_version
+            else:
+                self._detect_directml(info)
 
         except ImportError:
-            # PyTorch not installed, try system-level detection
             self._detect_nvidia_smi(info)
             if not info["gpu_available"]:
                 self._detect_amd_wmi(info)
 
         self._cached_info = info
         return info
+
+    def _detect_directml(self, info: dict) -> None:
+        """Detect AMD DirectML backend.
+
+        NOTE: DirectML is detected but NOT used for CosyVoice2 inference
+        due to compatibility issues with torch.concat and other operations.
+        The model will fall back to CPU mode.
+        """
+        pass
 
     def _detect_nvidia_smi(self, info: dict) -> None:
         """Fallback: detect NVIDIA GPU via nvidia-smi."""

@@ -4,10 +4,74 @@ Binds to 127.0.0.1 on a random available port.
 Outputs {"status": "ready", "port": N} to stdout for Electron to read.
 """
 
-import json
-import os
-import socket
 import sys
+import os
+
+# CRITICAL: Set UTF-8 encoding BEFORE any other imports
+# This must happen before CosyVoice modules initialize their logging
+if sys.platform == "win32":
+    # Reconfigure stdio separately from locale so locale failure doesn't
+    # prevent UTF-8 streams from being set up.
+    for _stream_name in ("stdout", "stderr"):
+        try:
+            getattr(sys, _stream_name).reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+    try:
+        import locale
+        # Windows may not have 'en_US.UTF-8'; try generic '.UTF-8' fallback
+        try:
+            locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
+        except locale.Error:
+            try:
+                locale.setlocale(locale.LC_ALL, '.UTF-8')
+            except locale.Error:
+                pass
+    except Exception:
+        pass
+
+# Force UTF-8 mode for all file I/O and string operations
+os.environ.setdefault("PYTHONUTF8", "1")
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+
+import logging as _logging
+
+
+def _fix_logging_handler_encoding():
+    """Ensure all existing logging StreamHandlers write UTF-8.
+
+    CosyVoice's file_utils.py calls logging.basicConfig() on import, which
+    creates a StreamHandler.  On Windows the handler's stream may default to
+    the system code page (e.g. GBK/cp936) causing Chinese text to appear
+    garbled.  This function patches every StreamHandler on the root logger
+    so it explicitly uses UTF-8.
+    """
+    import io
+    for handler in _logging.root.handlers:
+        if isinstance(handler, _logging.StreamHandler):
+            stream = handler.stream
+            if hasattr(stream, "reconfigure"):
+                try:
+                    stream.reconfigure(encoding="utf-8", errors="replace")
+                except Exception:
+                    pass
+            elif hasattr(stream, "buffer"):
+                # Replace with a new UTF-8 TextIOWrapper around the buffer
+                try:
+                    handler.stream = io.TextIOWrapper(
+                        stream.buffer, encoding="utf-8", errors="replace"
+                    )
+                except Exception:
+                    pass
+
+
+# Debug: Print encoding info at startup
+print(f"[server] Python startup - sys.flags.utf8_mode: {sys.flags.utf8_mode}", file=sys.stderr, flush=True)
+print(f"[server] sys.stdout.encoding: {sys.stdout.encoding}", file=sys.stderr, flush=True)
+print(f"[server] sys.stderr.encoding: {sys.stderr.encoding}", file=sys.stderr, flush=True)
+
+import json
+import socket
 import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -100,11 +164,11 @@ def main():
 
     # Ensure UTF-8 console output on Windows (avoid garbled Chinese logs).
     if sys.platform == "win32":
-        try:
-            sys.stdout.reconfigure(encoding="utf-8")
-            sys.stderr.reconfigure(encoding="utf-8")
-        except Exception:
-            pass
+        for _stream_name in ("stdout", "stderr"):
+            try:
+                getattr(sys, _stream_name).reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
 
     port = find_free_port()
 
@@ -113,11 +177,37 @@ def main():
     sys.stdout.write(ready_signal + "\n")
     sys.stdout.flush()
 
+    # Fix any logging handlers that were created before UTF-8 was configured
+    _fix_logging_handler_encoding()
+
     uvicorn.run(
         app,
         host="127.0.0.1",
         port=port,
         log_level="info",
+        log_config={
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {
+                "default": {
+                    "()": "uvicorn.logging.DefaultFormatter",
+                    "fmt": "%(levelprefix)s %(message)s",
+                    "use_colors": None,
+                },
+            },
+            "handlers": {
+                "default": {
+                    "formatter": "default",
+                    "class": "logging.StreamHandler",
+                    "stream": "ext://sys.stderr",
+                },
+            },
+            "loggers": {
+                "uvicorn": {"handlers": ["default"], "level": "INFO"},
+                "uvicorn.error": {"level": "INFO"},
+                "uvicorn.access": {"handlers": ["default"], "level": "INFO", "propagate": False},
+            },
+        },
     )
 
 

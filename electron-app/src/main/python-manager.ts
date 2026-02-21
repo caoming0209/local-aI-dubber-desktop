@@ -27,11 +27,20 @@ export class PythonManager {
       const pythonPath = this.getPythonPath();
       const serverScript = this.getServerScript();
 
-      this.process = spawn(pythonPath, [serverScript], {
+      // Use -X utf8 to force UTF-8 mode for all I/O operations
+      const pythonArgs = app.isPackaged 
+        ? []  // PyInstaller exe doesn't need script arg or -X utf8
+        : ['-X', 'utf8', serverScript];
+
+      this.process = spawn(pythonPath, pythonArgs, {
         cwd: this.getEngineCwd(),
         stdio: ['pipe', 'pipe', 'pipe'],
         env: {
           ...process.env,
+          PYTHONUTF8: '1',
+          PYTHONIOENCODING: 'utf-8',
+          LANG: 'en_US.UTF-8',
+          LC_ALL: 'en_US.UTF-8',
           // Pass dev mode flag to Python engine
           ...(app.isPackaged ? {} : { NODE_ENV: 'development', DEV_MODE: '1' }),
         },
@@ -42,11 +51,15 @@ export class PythonManager {
         reject(new Error('Python engine startup timeout (10s)'));
       }, this.startupTimeoutMs);
 
+      // Decode stdout as UTF-8 and only consume complete lines.
+      // This avoids breaking multi-byte characters across chunks.
       let stdoutBuffer = '';
 
       this.process.stdout?.on('data', (chunk: Buffer) => {
-        stdoutBuffer += chunk.toString();
+        stdoutBuffer += chunk.toString('utf8');
         const lines = stdoutBuffer.split('\n');
+        stdoutBuffer = lines.pop() ?? '';
+
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed) continue;
@@ -64,8 +77,9 @@ export class PythonManager {
         }
       });
 
+      // Decode stderr as UTF-8; keep each chunk intact.
       this.process.stderr?.on('data', (chunk: Buffer) => {
-        console.error('[python-engine]', chunk.toString());
+        console.error('[python-engine]', chunk.toString('utf8'));
       });
 
       this.process.on('exit', (code) => {

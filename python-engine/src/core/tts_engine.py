@@ -22,6 +22,7 @@ class TTSEngine:
         self._model = None
         self._model_dir: str = ""
         self._device: str = "cpu"
+        self._backend: str = "cpu"
         self._lock = threading.Lock()
 
     def _get_model_dir(self) -> str:
@@ -39,6 +40,16 @@ class TTSEngine:
             )
         return os.path.join(base, "cosyvoice2", "CosyVoice2-0.5B")
 
+    def _get_torch_device(self):
+        """Get PyTorch device object based on backend."""
+        if self._backend == "directml":
+            try:
+                import torch_directml
+                return torch_directml.device()
+            except ImportError:
+                return "cpu"
+        return self._device
+
     def _ensure_model(self) -> None:
         """Lazy-load CosyVoice2 model (thread-safe)."""
         if self._model is not None:
@@ -55,6 +66,8 @@ class TTSEngine:
                     "请先下载模型或在设置中配置模型存储路径。"
                 )
 
+            gpu_info = gpu_detector.detect()
+            self._backend = gpu_info.get("backend", "cpu")
             self._device = gpu_detector.get_inference_device()
 
             # Add CosyVoice to sys.path
@@ -69,13 +82,46 @@ class TTSEngine:
 
             from cosyvoice.cli.cosyvoice import CosyVoice2
 
-            print(f"[tts] Loading CosyVoice2 model from {model_dir} on {self._device}")
+            # CosyVoice's file_utils.py calls logging.basicConfig() on import,
+            # which may create a StreamHandler with the system code page (GBK).
+            # Patch all existing StreamHandlers to force UTF-8.
+            try:
+                import io
+                import logging
 
-            # CosyVoice2 sometimes loads weights in BF16 (depending on checkpoints / env).
-            # If we don't enable mixed precision, BF16 weights + FP32 inputs can trigger matmul dtype mismatch.
-            fp16 = self._device == "cuda"
+                for handler in logging.root.handlers:
+                    if isinstance(handler, logging.StreamHandler):
+                        stream = handler.stream
+                        if hasattr(stream, "reconfigure"):
+                            try:
+                                stream.reconfigure(encoding="utf-8", errors="replace")
+                            except Exception:
+                                pass
+                        elif hasattr(stream, "buffer"):
+                            try:
+                                handler.stream = io.TextIOWrapper(
+                                    stream.buffer, encoding="utf-8", errors="replace"
+                                )
+                            except Exception:
+                                pass
+            except Exception:
+                pass
+
+            print(f"[tts] Loading CosyVoice2 model from {model_dir} on {self._device} (backend: {self._backend})")
+
+            fp16 = self._backend in ("cuda", "rocm")
             self._model = CosyVoice2(model_dir, fp16=fp16)
             self._model_dir = model_dir
+            
+            if self._backend == "directml":
+                import torch_directml
+                device = torch_directml.device()
+                self._model.model.device = device
+                self._model.model.llm = self._model.model.llm.to(device)
+                self._model.model.flow = self._model.model.flow.to(device)
+                self._model.model.hift = self._model.model.hift.to(device)
+                print(f"[tts] Model moved to DirectML device")
+            
             print(
                 f"[tts] Model loaded. Available speakers: {self._model.list_available_spks()}"
             )
@@ -235,6 +281,8 @@ class TTSEngine:
 
         try:
             tts_text = self._prepare_tts_text(text, min_token_len=60)
+            print(f"[tts] Text to synthesize (repr): {repr(tts_text[:100])}", flush=True)
+            print(f"[tts] Text to synthesize (head): {tts_text[:100]}", flush=True)
             _run_inference(tts_text)
 
         except RuntimeError as e:
