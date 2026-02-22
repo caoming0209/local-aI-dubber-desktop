@@ -399,8 +399,13 @@ class LipsyncEngine:
 
     def _mux_audio(self, video_path: str, audio_path: str, output_path: str, fps: float) -> None:
         """Combine video and audio using FFmpeg."""
+        from src.storage.settings_store import settings_store
+
+        settings = settings_store.read()
+        ffmpeg_path = settings.get("ffmpeg_path") or "ffmpeg"
+
         cmd = [
-            "ffmpeg", "-y",
+            ffmpeg_path, "-y",
             "-i", video_path,
             "-i", audio_path,
             "-c:v", "libx264",
@@ -427,8 +432,13 @@ class LipsyncEngine:
         """Create a placeholder video with audio for dev mode testing."""
         import subprocess
 
+        from src.storage.settings_store import settings_store
+
+        settings = settings_store.read()
+        ffmpeg_path = settings.get("ffmpeg_path") or "ffmpeg"
+
         cmd = [
-            "ffmpeg", "-y",
+            ffmpeg_path, "-y",
             "-f", "lavfi", "-i", "color=c=gray:s=1080x1920:d=5:r=25",
             "-i", audio_path,
             "-c:v", "libx264",

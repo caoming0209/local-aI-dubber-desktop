@@ -187,6 +187,7 @@ class TTSEngine:
 
         config = get_voice_config(voice_id)
         mode = config["mode"]
+        print(f"[tts] voice_id={voice_id}, mode={mode}", file=sys.stderr, flush=True)
 
         # Validate and clean text
         tts_text = self._prepare_tts_text(text)
@@ -257,6 +258,7 @@ class TTSEngine:
                 # Prepend system prefix + <|endofprompt|> to tts_text
                 cross_lingual_text = f"{SYSTEM_PREFIX}{EOP}{tts_text}"
                 print(f"[tts] cross_lingual: prompt={prompt_wav_path}", file=sys.stderr, flush=True)
+                print(f"[tts] cross_lingual: text={cross_lingual_text[:80]}...", file=sys.stderr, flush=True)
                 for output in self._model.inference_cross_lingual(
                     cross_lingual_text,
                     prompt_wav_path,
@@ -286,6 +288,10 @@ class TTSEngine:
         if not speech_chunks:
             raise RuntimeError("TTS 合成失败：未生成任何语音数据")
 
+        # Debug: check speech chunks
+        for i, chunk in enumerate(speech_chunks):
+            print(f"[tts] Chunk {i}: shape={chunk.shape}, min={chunk.min():.4f}, max={chunk.max():.4f}, mean={chunk.mean():.4f}", file=sys.stderr, flush=True)
+
         # Concatenate all chunks
         speech = torch.cat(speech_chunks, dim=1)
 
@@ -300,7 +306,8 @@ class TTSEngine:
         # Many Windows players / browser audio decoders behave poorly with
         # 32-bit float WAV (pcm_f32le). Convert to signed 16-bit PCM.
         speech_i16 = (speech * 32767.0).to(torch.int16)
-        torchaudio.save(output_path, speech_i16, self._model.sample_rate, encoding="PCM_S", bits_per_sample=16)
+        import soundfile as sf
+        sf.write(output_path, speech_i16.cpu().numpy().T, self._model.sample_rate, format='WAV', subtype='PCM_16')
 
         print(
             f"[tts] Synthesized: {output_path} (voice={voice_id}, mode={mode}, "
@@ -318,10 +325,34 @@ class TTSEngine:
         volume: float = 1.0,
         emotion: float = 0.5,
     ) -> bytes:
-        """Synthesize preview audio, return WAV bytes."""
+        """Synthesize preview audio, return WAV bytes.
+        
+        In dev mode, also saves a copy to project directory for debugging.
+        """
         path = self.synthesize(text, voice_id, speed, volume, emotion)
         with open(path, "rb") as f:
             data = f.read()
+        
+        # In dev mode, save a copy to project directory
+        if is_dev_mode():
+            try:
+                # Get project root directory (python-engine)
+                project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                dev_preview_dir = os.path.join(project_root, "data", "previews")
+                os.makedirs(dev_preview_dir, exist_ok=True)
+                
+                # Create a meaningful filename
+                safe_voice_id = voice_id.replace(" ", "_").replace("/", "_")
+                timestamp = str(uuid.uuid4().hex[:8])
+                dev_preview_path = os.path.join(dev_preview_dir, f"preview_{safe_voice_id}_{timestamp}.wav")
+                
+                # Copy the file
+                import shutil
+                shutil.copy2(path, dev_preview_path)
+                print(f"[tts] DEV mode: Saved preview to {dev_preview_path}", file=sys.stderr, flush=True)
+            except Exception as e:
+                print(f"[tts] DEV mode: Failed to save preview copy: {e}", file=sys.stderr, flush=True)
+        
         try:
             os.remove(path)
         except OSError:
@@ -378,9 +409,13 @@ class TTSEngine:
         for full_path in search_paths:
             if os.path.exists(full_path):
                 try:
-                    import torchaudio
-                    waveform, sr = torchaudio.load(full_path)
-                    duration = waveform.shape[1] / sr
+                    import soundfile as sf
+                    import numpy as np
+                    waveform_np, sr = sf.read(full_path)
+                    if len(waveform_np.shape) == 2:
+                        duration = waveform_np.shape[0] / sr
+                    else:
+                        duration = len(waveform_np) / sr
                     if duration >= 0.5:
                         print(f"[tts] Using custom prompt: {full_path}")
                         return full_path
@@ -408,10 +443,38 @@ class TTSEngine:
                 print("[tts] Model unloaded")
 
     def _create_placeholder_wav(self, path: str, duration: float = 3.0) -> None:
-        """Create a silent WAV file as placeholder (dev mode only)."""
+        """Create an audible placeholder WAV (dev mode only).
+
+        Returning a perfectly silent WAV makes preview look "broken". This generates
+        a short sine-wave tone so playback is obvious even when the real model is
+        unavailable.
+        """
+        import math
+        from array import array
+
         sample_rate = 24000
         num_samples = int(sample_rate * duration)
-        data_size = num_samples * 2  # 16-bit mono
+
+        freq_hz = 440.0
+        amplitude = 0.2
+        fade_samples = int(sample_rate * 0.02)
+
+        pcm = array("h")
+        for i in range(num_samples):
+            t = i / sample_rate
+            v = math.sin(2.0 * math.pi * freq_hz * t) * amplitude
+
+            if fade_samples > 0:
+                if i < fade_samples:
+                    v *= i / fade_samples
+                elif i >= num_samples - fade_samples:
+                    v *= max(0.0, (num_samples - 1 - i) / fade_samples)
+
+            pcm.append(int(max(-1.0, min(1.0, v)) * 32767.0))
+
+        data_bytes = pcm.tobytes()
+        data_size = len(data_bytes)
+
         with open(path, "wb") as f:
             f.write(b"RIFF")
             f.write(struct.pack("<I", 36 + data_size))
@@ -426,7 +489,7 @@ class TTSEngine:
             f.write(struct.pack("<H", 16))
             f.write(b"data")
             f.write(struct.pack("<I", data_size))
-            f.write(b"\x00" * data_size)
+            f.write(data_bytes)
 
 
 tts_engine = TTSEngine()

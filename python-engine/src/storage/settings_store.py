@@ -17,6 +17,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "modelStoragePath": str(
         Path.home() / "Documents" / "local-aI-dubber-desktop" / "models"
     ),
+    "ffmpeg_path": "ffmpeg",
     "downloadSpeedLimitKBps": 0,
     "autoDownloadModels": True,
     "inferenceMode": "auto",

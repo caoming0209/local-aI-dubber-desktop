@@ -17,7 +17,10 @@
       "Bash(specify check:*)",
       "WebFetch(domain:releases.electronjs.org)",
       "WebFetch(domain:www.electronjs.org)",
-      "Bash(powershell -ExecutionPolicy Bypass -File:*)"
+      "Bash(powershell -ExecutionPolicy Bypass -File:*)",
+      "Bash(python -c \"import os,sys; sys.path.insert\\(0,''python-engine''\\); os.environ[''DEV_MODE'']=''1''; from src.core.tts_engine import tts_engine; b=tts_engine.preview\\(''测试试听'', ''voice_male_01''\\); print\\(''bytes'', len\\(b\\)\\); import struct; import wave, io; w=wave.open\\(io.BytesIO\\(b\\),''rb''\\); print\\(''wav'', w.getnchannels\\(\\), w.getframerate\\(\\), w.getsampwidth\\(\\), w.getnframes\\(\\)\\); frames=w.readframes\\(min\\(10000,w.getnframes\\(\\)\\)\\); mx=max\\(abs\\(struct.unpack\\(''<%dh''%\\(len\\(frames\\)//2\\), frames\\)\\)\\); print\\(''max_abs_sample'', mx\\)\")",
+      "Bash(python -c \"import os,sys,io,wave,struct; sys.path.insert\\(0,''python-engine''\\); os.environ[''DEV_MODE'']=''1''; from src.core.tts_engine import tts_engine; b=tts_engine.preview\\(''测试试听'', ''voice_male_01''\\); print\\(''bytes'', len\\(b\\)\\); w=wave.open\\(io.BytesIO\\(b\\),''rb''\\); print\\(''wav'', w.getnchannels\\(\\), w.getframerate\\(\\), w.getsampwidth\\(\\), w.getnframes\\(\\)\\); frames=w.readframes\\(min\\(24000,w.getnframes\\(\\)\\)\\); samples=struct.unpack\\(''<%dh''%\\(len\\(frames\\)//2\\), frames\\); mx=max\\(abs\\(s\\) for s in samples\\); print\\(''max_abs_sample'', mx\\)\")",
+      "Bash(python:*)"
     ]
   }
 }

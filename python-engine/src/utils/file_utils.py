@@ -19,9 +19,14 @@ def ensure_dir(p: str) -> str:
 
 def extract_thumbnail(video_path: str, output_path: str) -> Optional[str]:
     """Extract first frame from video as JPEG thumbnail using FFmpeg."""
+    from src.storage.settings_store import settings_store
+
+    settings = settings_store.read()
+    ffmpeg_path = settings.get("ffmpeg_path") or "ffmpeg"
+
     try:
         cmd = [
-            "ffmpeg", "-y",
+            ffmpeg_path, "-y",
             "-i", video_path,
             "-vframes", "1",
             "-q:v", "2",

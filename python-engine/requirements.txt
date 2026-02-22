@@ -46,6 +46,7 @@ wget==3.2
 x-transformers==2.11.24
 pyarrow>=15.0
 pyworld==0.3.4
+rich==13.7.1
 
 # Testing
 pytest==8.3.4

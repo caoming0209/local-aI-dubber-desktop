@@ -10,7 +10,10 @@ from src.utils.dev_mode import is_dev_mode
 
 class VideoSynthesizer:
     def __init__(self):
-        self._ffmpeg_path = "ffmpeg"
+        from src.storage.settings_store import settings_store
+
+        settings = settings_store.read()
+        self._ffmpeg_path = settings.get("ffmpeg_path") or "ffmpeg"
 
     def synthesize(
         self,
@@ -116,8 +119,10 @@ class VideoSynthesizer:
             if result.returncode != 0:
                 print(f"[synthesizer] FFmpeg error: {result.stderr}")
                 raise RuntimeError(f"FFmpeg failed: {result.stderr[:500]}")
-        except FileNotFoundError:
-            raise RuntimeError("FFmpeg not found. Please install FFmpeg and add it to PATH.")
+        except FileNotFoundError as e:
+            raise RuntimeError(
+                "FFmpeg 未找到：请安装 FFmpeg 并加入 PATH，或在 settings.json 设置 ffmpeg_path。"
+            ) from e
 
         print(f"[synthesizer] Output: {output_path}")
         return output_path
@@ -133,7 +138,12 @@ class VideoSynthesizer:
             "-ac", "1",
             output_path,
         ]
-        subprocess.run(cmd, capture_output=True, check=True, timeout=30)
+        try:
+            subprocess.run(cmd, capture_output=True, check=True, timeout=30)
+        except FileNotFoundError as e:
+            raise RuntimeError(
+                "FFmpeg 未找到：请安装 FFmpeg 并加入 PATH，或在 settings.json 设置 ffmpeg_path。"
+            ) from e
         return output_path
 
     def extract_thumbnail(self, video_path: str, output_path: str) -> str:

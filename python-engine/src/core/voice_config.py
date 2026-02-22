@@ -14,11 +14,11 @@ VOICE_CONFIGS = {
     # ─── Standard male voices ───────────────────────────────
     "voice_male_01": {
         "name": "标准男声-浩然",
-        "mode": "zero_shot",
+        "mode": "cross_lingual",
         "speaker_id": None,
         "instruct_text": "用标准普通话朗读这段话。",
         "prompt_wav": "voices/male_haoran/prompt.wav",
-        "prompt_text": "大家好，我是浩然，很高兴为您服务。",
+        "prompt_text": "希望你以后能够做的比我还好呦。",
     },
     "voice_male_02": {
         "name": "磁性男声-子轩",
