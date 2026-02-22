@@ -2,12 +2,18 @@
 """Voice model management routes."""
 
 import asyncio
+import logging
+import os
+import re
 from fastapi import APIRouter
 from fastapi.responses import Response
 
 from src.storage.voice_models_repo import voice_models_repo
 from src.core.tts_engine import tts_engine
 from src.core.model_manager import model_manager
+from src.core.voice_config import get_voice_config
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["voices"])
 
@@ -51,15 +57,14 @@ async def start_download(voice_id: str):
 
 
 async def _download_model(voice_id: str) -> None:
-    """Download CosyVoice2 base model via huggingface_hub."""
+    """Download CosyVoice3 base model via huggingface_hub."""
     try:
         models_dir = model_manager.get_models_dir()
-        cosyvoice_dir = __import__("os").path.join(models_dir, "cosyvoice2", "CosyVoice2-0.5B")
+        cosyvoice_dir = os.path.join(models_dir, "cosyvoice3", "Fun-CosyVoice3-0.5B-2512")
 
-        if __import__("os").path.isdir(cosyvoice_dir):
-            yaml_path = __import__("os").path.join(cosyvoice_dir, "cosyvoice2.yaml")
-            if __import__("os").path.isfile(yaml_path):
-                voice = voice_models_repo.get_by_id(voice_id)
+        if os.path.isdir(cosyvoice_dir):
+            yaml_path = os.path.join(cosyvoice_dir, "cosyvoice3.yaml")
+            if os.path.isfile(yaml_path):
                 model_path = cosyvoice_dir
                 voice_models_repo.update_download_status(voice_id, "downloaded", 1.0, model_path)
                 model_manager.verify_on_download_complete(voice_id, model_path)
@@ -70,7 +75,7 @@ async def _download_model(voice_id: str) -> None:
         def _do_download():
             from huggingface_hub import snapshot_download
             return snapshot_download(
-                repo_id="FunAudioLLM/CosyVoice2-0.5B",
+                repo_id="FunAudioLLM/Fun-CosyVoice3-0.5B-2512",
                 local_dir=cosyvoice_dir,
                 resume_download=True,
             )
@@ -87,7 +92,7 @@ async def _download_model(voice_id: str) -> None:
     except asyncio.CancelledError:
         voice_models_repo.update_download_status(voice_id, "not_downloaded", 0)
     except Exception as e:
-        print(f"[voices] Download failed for {voice_id}: {e}")
+        logger.error(f"Download failed for {voice_id}: {e}")
         voice_models_repo.update_download_status(voice_id, "not_downloaded", 0)
     finally:
         _download_tasks.pop(voice_id, None)
@@ -144,24 +149,17 @@ async def preview_voice(voice_id: str, body: dict):
     if voice.get("download_status") != "downloaded":
         return {"success": False, "error": {"code": "MODEL_NOT_DOWNLOADED", "message": "请先下载该音色模型后再试听"}}
 
-    # Use bytes to avoid encoding issues with source file
-    default_text_bytes = bytes([
-        0xe6, 0xac, 0xa2, 0xe8, 0xbf, 0x8e, 0xe4, 0xbd, 0xbf, 0xe7, 0x94, 0xa8, 0xe6, 0x99, 0xba, 0xe5,
-        0xbd, 0xb1, 0xe5, 0x8f, 0xa3, 0xe6, 0x92, 0xad, 0xe5, 0x8a, 0xa9, 0xe6, 0x89, 0x8b, 0xef,
-        0xbc, 0x8c, 0xe6, 0x9c, 0xac, 0xe5, 0xb7, 0xa5, 0xe5, 0x85, 0xb7, 0xe8, 0x87, 0xb4, 0xe5,
-        0x8a, 0x9b, 0xe4, 0xba, 0x8e, 0xe4, 0xb8, 0xba, 0xe6, 0x82, 0xa8, 0xe6, 0x8f, 0x90, 0xe4,
-        0xbe, 0x9b, 0xe6, 0x99, 0xba, 0xe8, 0x83, 0xbd, 0xe3, 0x80, 0x81, 0xe6, 0xb5, 0x81, 0xe7,
-        0x95, 0x85, 0xe3, 0x80, 0x81, 0xe9, 0xab, 0x98, 0xe8, 0xb4, 0xa8, 0xe6, 0x84, 0x9f, 0xe7,
-        0x9a, 0x84, 0xe5, 0x8f, 0xa3, 0xe6, 0x92, 0xad, 0xe4, 0xbd, 0x93, 0xe9, 0xaa, 0x8c, 0xef,
-        0xbc, 0x8c, 0xe5, 0x8a, 0xa9, 0xe5, 0x8a, 0x9b, 0xe6, 0x82, 0xa8, 0xe5, 0xbf, 0xab, 0xe9,
-        0x80, 0x9f, 0xe6, 0x89, 0x93, 0xe9, 0x80, 0xa0, 0xe4, 0xbc, 0x98, 0xe8, 0xb4, 0xa8, 0xe9,
-        0x9f, 0xb3, 0xe9, 0xa2, 0x91, 0xe4, 0xb8, 0x8e, 0xe8, 0xa7, 0x86, 0xe9, 0xa2, 0x91, 0xe5,
-        0x86, 0x85, 0xe5, 0xae, 0xb9, 0xef, 0xbc, 0x8c, 0xe6, 0x8f, 0x90, 0xe5, 0x8d, 0x87, 0xe5,
-        0x88, 0x9b, 0xe4, 0xbd, 0x9c, 0xe6, 0x95, 0x88, 0xe7, 0x8e, 0x87, 0xe3, 0x80, 0x82,
-    ])
-    default_text = default_text_bytes.decode('utf-8')
+    # Use provided text, or fall back to voice-specific prompt text, or default
+    voice_config = get_voice_config(voice_id)
+    default_text = voice_config.get("prompt_text") or DEFAULT_PREVIEW_TEXT
 
     text = body.get("text", default_text)
+    if isinstance(text, bytes):
+        text = text.decode('utf-8')
+
+    # Filter control characters that could cause synthesis issues
+    text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
+
     speed = body.get("speed", 1.0)
     volume = body.get("volume", 1.0)
     emotion = body.get("emotion", 0.5)
@@ -170,7 +168,11 @@ async def preview_voice(voice_id: str, body: dict):
         audio_bytes = await asyncio.to_thread(
             tts_engine.preview, text, voice_id, speed, volume, emotion
         )
-        return Response(content=audio_bytes, media_type="audio/wav")
+        return Response(
+            content=audio_bytes,
+            media_type="audio/wav",
+            headers={"Content-Length": str(len(audio_bytes))}
+        )
     except Exception as e:
-        print(f"[voices] Preview failed for {voice_id}: {e}")
+        logger.error(f"Preview failed for {voice_id}: {e}", exc_info=True)
         return {"success": False, "error": {"code": "INTERNAL_ERROR", "message": str(e)}}

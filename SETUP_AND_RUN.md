@@ -12,6 +12,28 @@
 - 安装 FFmpeg 并加入系统 PATH（确保 ffmpeg 命令可用）
 - （可选）安装 Visual Studio Build Tools（用于编译本地 Node 原生模块）
 
+### 1.1 克隆仓库及子模块
+
+本项目包含两个 Git 子模块，需要递归克隆：
+
+```powershell
+# 方式一：首次克隆时递归拉取所有子模块
+git clone --recursive https://github.com/your-repo/local-aI-dubber-desktop.git
+
+# 方式二：如果已克隆但未拉取子模块，执行以下命令
+cd D:\Git.Project\local-aI-dubber-desktop
+git submodule update --init --recursive
+```
+
+**子模块说明：**
+
+| 子模块 | 来源仓库 | 用途 |
+|--------|----------|------|
+| `python-engine/third_party/CosyVoice` | https://github.com/FunAudioLLM/CosyVoice.git | 语音合成引擎（TTS） |
+| `python-engine/third_party/Wav2Lip` | https://github.com/Rudrabha/Wav2Lip.git | 唇形同步引擎 |
+
+**注意：** CosyVoice 内部还依赖 `Matcha-TTS` 子模块（位于 `CosyVoice/third_party/Matcha-TTS`），`--recursive` 参数会一并拉取。
+
 ## 2. Python（后端引擎）
 
 1. 进入 Python 引擎目录并创建虚拟环境：
@@ -52,6 +74,18 @@ python src\api\server.py
 ```
 
 然后 Uvicorn 会在该端口上启动服务。
+
+5. 下载 CosyVoice3 模型（首次使用时需要）：
+
+```powershell
+# 下载 CosyVoice3 基础模型
+python download_cosyvoice3.py
+
+# 可选：下载 Wav2Lip 模型（用于唇形同步）
+python download_wav2lip.py
+```
+
+模型会下载到 `~/Documents/local-aI-dubber-desktop/models/` 目录。
 
 ## 3. 前端（Renderer）
 

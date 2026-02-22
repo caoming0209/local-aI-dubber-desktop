@@ -103,15 +103,15 @@ class ModelManager:
         """
         from src.utils.dev_mode import is_dev_mode
 
-        # Check CosyVoice2 base model exists
-        cosyvoice_dir = os.path.join(self.get_models_dir(), "cosyvoice2", "CosyVoice2-0.5B")
+        # Check CosyVoice3 base model exists
+        cosyvoice_dir = os.path.join(self.get_models_dir(), "cosyvoice3", "Fun-CosyVoice3-0.5B-2512")
         if not os.path.isdir(cosyvoice_dir):
             if is_dev_mode():
-                print("[model_manager] DEV mode: CosyVoice2 model not found, engines will use fallback")
+                print("[model_manager] DEV mode: CosyVoice3 model not found, engines will use fallback")
                 return ModelVerifyResult(True)
             return ModelVerifyResult(
                 False, "MODEL_NOT_FOUND",
-                "CosyVoice2 基础模型未下载，请先下载 CosyVoice2-0.5B 模型。"
+                "CosyVoice3 基础模型未下载，请先下载 Fun-CosyVoice3-0.5B-2512 模型。"
             )
 
         conn = get_connection()

@@ -1,8 +1,8 @@
-"""TTS engine: CosyVoice 2 integration with dev mode fallback.
+"""TTS engine: CosyVoice 3 integration with dev mode fallback.
 
-Lazy-loads the CosyVoice2 model on first use. Thread-safe via Lock.
-Supports SFT (built-in speakers), zero-shot (voice cloning), and
-instruct2 (instruction-guided) inference modes.
+Lazy-loads the CosyVoice3 model on first use. Thread-safe via Lock.
+Supports zero-shot (voice cloning), cross-lingual, and instruct2
+(instruction-guided) inference modes.
 """
 
 import os
@@ -26,7 +26,7 @@ class TTSEngine:
         self._lock = threading.Lock()
 
     def _get_model_dir(self) -> str:
-        """Resolve CosyVoice2 model directory from settings."""
+        """Resolve CosyVoice3 model directory from settings."""
         from src.storage.settings_store import settings_store
 
         settings = settings_store.read()
@@ -38,7 +38,7 @@ class TTSEngine:
                 "local-aI-dubber-desktop",
                 "models",
             )
-        return os.path.join(base, "cosyvoice2", "CosyVoice2-0.5B")
+        return os.path.join(base, "cosyvoice3", "Fun-CosyVoice3-0.5B-2512")
 
     def _get_torch_device(self):
         """Get PyTorch device object based on backend."""
@@ -51,7 +51,7 @@ class TTSEngine:
         return self._device
 
     def _ensure_model(self) -> None:
-        """Lazy-load CosyVoice2 model (thread-safe)."""
+        """Lazy-load CosyVoice3 model (thread-safe)."""
         if self._model is not None:
             return
 
@@ -62,7 +62,7 @@ class TTSEngine:
             model_dir = self._get_model_dir()
             if not os.path.isdir(model_dir):
                 raise RuntimeError(
-                    f"CosyVoice2 模型未找到: {model_dir}\n"
+                    f"CosyVoice3 模型未找到: {model_dir}\n"
                     "请先下载模型或在设置中配置模型存储路径。"
                 )
 
@@ -80,7 +80,7 @@ class TTSEngine:
                 if p not in sys.path:
                     sys.path.insert(0, p)
 
-            from cosyvoice.cli.cosyvoice import CosyVoice2
+            from cosyvoice.cli.cosyvoice import CosyVoice3
 
             # CosyVoice's file_utils.py calls logging.basicConfig() on import,
             # which may create a StreamHandler with the system code page (GBK).
@@ -107,10 +107,10 @@ class TTSEngine:
             except Exception:
                 pass
 
-            print(f"[tts] Loading CosyVoice2 model from {model_dir} on {self._device} (backend: {self._backend})")
+            print(f"[tts] Loading CosyVoice3 model from {model_dir} on {self._device} (backend: {self._backend})")
 
             fp16 = self._backend in ("cuda", "rocm")
-            self._model = CosyVoice2(model_dir, fp16=fp16)
+            self._model = CosyVoice3(model_dir, fp16=fp16)
             self._model_dir = model_dir
             
             if self._backend == "directml":
@@ -137,47 +137,20 @@ class TTSEngine:
                 return
             raise
 
-    def _prepare_tts_text(self, text: str, min_token_len: int = 60) -> str:
-        """Prepare TTS text so CosyVoice2 can handle very short scripts.
+    def _prepare_tts_text(self, text: str) -> str:
+        """Validate and clean TTS text.
 
-        CosyVoice2's frontend has `token_min_n=60` in paragraph splitting.
-        Extremely short token sequences can trigger Conv1d kernel-size errors.
-
-        Strategy:
-        - Normalize with `split=False` to get a single string.
-        - If token length is too short, repeat the normalized text with Chinese comma.
-          Remove trailing sentence-ending punctuation before repeating to avoid creating
-          many tiny sentences.
+        Does NOT add <|endofprompt|> markers — that is handled per-mode
+        in synthesize() according to CosyVoice3's expected input format.
         """
         safe_text = (text or "").strip()
         if len(safe_text) < 4:
             raise ValueError("文案太短，至少需要4个字符才能合成语音。")
 
-        # NOTE: Some text frontends (e.g. ttsfrd) may produce mojibake on Windows.
-        # Keep frontend normalization off to preserve original Unicode text.
-        normalized = self._model.frontend.text_normalize(
-            safe_text, split=False, text_frontend=False
-        )
-        normalized = (normalized or "").strip()
-        if not normalized:
-            raise ValueError("文案不能为空")
+        if isinstance(safe_text, bytes):
+            safe_text = safe_text.decode('utf-8')
 
-        try:
-            _, text_len = self._model.frontend._extract_text_token(normalized)
-            token_len = int(text_len.item())
-        except Exception:
-            return normalized
-
-        if token_len <= 0 or token_len >= min_token_len:
-            return normalized
-
-        base = normalized.rstrip("。.!?！？")
-        if not base:
-            base = normalized
-
-        times = (min_token_len + token_len - 1) // token_len
-        expanded = "，".join([base] * times) + "。"
-        return expanded
+        return safe_text
 
     def synthesize(
         self,
@@ -215,34 +188,22 @@ class TTSEngine:
         config = get_voice_config(voice_id)
         mode = config["mode"]
 
+        # Validate and clean text
+        tts_text = self._prepare_tts_text(text)
+
         # Collect all speech chunks from the generator
         speech_chunks = []
 
-        prompt_wav_path = None
-        prompt_text = None
-        instruct_text = None
+        # CosyVoice3 <|endofprompt|> marker placement follows official examples:
+        #   zero_shot:     prompt_text = "You are a helpful assistant.<|endofprompt|>" + prompt_text
+        #                  tts_text    = raw user text (no markers)
+        #   cross_lingual: tts_text    = "You are a helpful assistant.<|endofprompt|>" + user text
+        #   instruct2:     instruct_text = "You are a helpful assistant. " + instruction + "<|endofprompt|>"
+        #                  tts_text    = raw user text (no markers)
+        SYSTEM_PREFIX = "You are a helpful assistant."
+        EOP = "<|endofprompt|>"
 
-        if mode in {"zero_shot", "instruct2"}:
-            prompt_wav_path = self._resolve_prompt_path(config["prompt_wav"])
-
-        if mode == "zero_shot":
-            prompt_text = config["prompt_text"] or ""
-            prompt_text = self._model.frontend.text_normalize(
-                prompt_text, split=False, text_frontend=False
-            )
-
-        if mode == "instruct2":
-            instruct_text = config["instruct_text"] or ""
-            instruct_text = self._model.frontend.text_normalize(
-                instruct_text, split=False, text_frontend=False
-            )
-            print(
-                f"[tts] Using prompt: {prompt_wav_path}, instruct: {instruct_text[:30]}..."
-            )
-
-        def _run_inference(tts_text: str) -> None:
-            # Pass text_frontend=False to avoid CosyVoice doing its own split/segmenting.
-            # We already normalized + expanded short scripts in _prepare_tts_text().
+        try:
             if mode == "sft":
                 speaker_id = config["speaker_id"]
                 for output in self._model.inference_sft(
@@ -250,58 +211,70 @@ class TTSEngine:
                     speaker_id,
                     stream=False,
                     speed=speed,
-                    text_frontend=False,
                 ):
                     speech_chunks.append(output["tts_speech"])
 
             elif mode == "zero_shot":
+                prompt_wav_path = self._resolve_prompt_path(config["prompt_wav"])
+                # prompt_text must include system prefix + <|endofprompt|> + actual prompt text
+                raw_prompt_text = config.get("prompt_text", "") or ""
+                prompt_text = f"{SYSTEM_PREFIX}{EOP}{raw_prompt_text}"
+                print(f"[tts] zero_shot: prompt={prompt_wav_path}", file=sys.stderr, flush=True)
                 for output in self._model.inference_zero_shot(
                     tts_text,
                     prompt_text,
                     prompt_wav_path,
+                    zero_shot_spk_id='',
                     stream=False,
                     speed=speed,
-                    text_frontend=False,
                 ):
                     speech_chunks.append(output["tts_speech"])
 
             elif mode == "instruct2":
+                prompt_wav_path = self._resolve_prompt_path(config["prompt_wav"])
+                # instruct_text must include system prefix + instruction + <|endofprompt|>
+                raw_instruct = config.get("instruct_text", "") or ""
+                # If already has the system prefix, use as-is; otherwise prepend it
+                if raw_instruct.startswith(SYSTEM_PREFIX):
+                    instruct_text = raw_instruct
+                else:
+                    # Strip trailing <|endofprompt|> to rebuild properly
+                    instruction = raw_instruct.replace(EOP, "").strip()
+                    instruct_text = f"{SYSTEM_PREFIX} {instruction}{EOP}"
+                print(f"[tts] instruct2: instruct={instruct_text[:60]}...", file=sys.stderr, flush=True)
                 for output in self._model.inference_instruct2(
                     tts_text,
                     instruct_text,
                     prompt_wav_path,
+                    zero_shot_spk_id='',
                     stream=False,
                     speed=speed,
-                    text_frontend=False,
+                ):
+                    speech_chunks.append(output["tts_speech"])
+
+            elif mode == "cross_lingual":
+                prompt_wav_path = self._resolve_prompt_path(config["prompt_wav"])
+                # Prepend system prefix + <|endofprompt|> to tts_text
+                cross_lingual_text = f"{SYSTEM_PREFIX}{EOP}{tts_text}"
+                print(f"[tts] cross_lingual: prompt={prompt_wav_path}", file=sys.stderr, flush=True)
+                for output in self._model.inference_cross_lingual(
+                    cross_lingual_text,
+                    prompt_wav_path,
+                    zero_shot_spk_id='',
+                    stream=False,
+                    speed=speed,
                 ):
                     speech_chunks.append(output["tts_speech"])
 
             else:
                 raise ValueError(f"Unknown TTS mode: {mode}")
 
-        try:
-            tts_text = self._prepare_tts_text(text, min_token_len=60)
-
-            # Print as unicode_escape so logs are stable even if the console ends up
-            # using a non-UTF8 codepage.
-            _head = tts_text[:100]
-            _head_escape = _head.encode("unicode_escape", errors="backslashreplace").decode("ascii")
-            print(
-                f"[tts] Text to synthesize (unicode_escape): {_head_escape}",
-                file=sys.stderr,
-                flush=True,
-            )
-
-            _run_inference(tts_text)
-
         except RuntimeError as e:
-            if "Kernel size can't be greater than actual input size" not in str(e):
-                raise
-
-            # Retry once by expanding more, keeping original content.
-            speech_chunks = []
-            tts_text = self._prepare_tts_text(text, min_token_len=120)
-            _run_inference(tts_text)
+            if "Kernel size can't be greater than actual input size" in str(e):
+                raise RuntimeError(
+                    f"TTS 合成失败：文本太短，无法生成语音。请尝试使用更长的文本。原始错误: {e}"
+                ) from e
+            raise
 
         except ValueError as e:
             if "prompt wav is too short" in str(e).lower():
@@ -384,28 +357,40 @@ class TTSEngine:
                 os.path.expanduser("~"), "Documents", "local-aI-dubber-desktop", "models"
             )
 
-        full_path = os.path.join(base, "cosyvoice2", relative_path)
-        if not os.path.exists(full_path):
-            print(f"[tts] WARNING: Prompt WAV not found: {full_path}, using default prompt")
-            return default_prompt
+        # Try multiple locations in order of preference:
+        # 1. Project voices directory (for development)
+        # 2. cosyvoice3 model directory
+        # 3. cosyvoice2 model directory
+        
+        # 1. Check project voices directory
+        # relative_path already starts with "voices/", so we don't need to add it again
+        project_voices = os.path.join(
+            os.path.dirname(__file__), "..", ".."
+        )
+        project_voices = os.path.normpath(project_voices)
+        
+        search_paths = [
+            os.path.join(project_voices, relative_path),
+            os.path.join(base, "cosyvoice3", relative_path),
+            os.path.join(base, "cosyvoice2", relative_path),
+        ]
 
-        try:
-            import torchaudio
-
-            waveform, sr = torchaudio.load(full_path)
-            duration = waveform.shape[1] / sr
-            if duration < 0.5:
-                print(
-                    f"[tts] WARNING: Prompt WAV too short ({duration:.2f}s), using default prompt"
-                )
-                return default_prompt
-        except Exception as e:
-            print(
-                f"[tts] WARNING: Failed to check prompt WAV duration: {e}, using default prompt"
-            )
-            return default_prompt
-
-        return full_path
+        for full_path in search_paths:
+            if os.path.exists(full_path):
+                try:
+                    import torchaudio
+                    waveform, sr = torchaudio.load(full_path)
+                    duration = waveform.shape[1] / sr
+                    if duration >= 0.5:
+                        print(f"[tts] Using custom prompt: {full_path}")
+                        return full_path
+                    else:
+                        print(f"[tts] WARNING: Prompt WAV too short ({duration:.2f}s): {full_path}")
+                except Exception as e:
+                    print(f"[tts] WARNING: Failed to check prompt WAV: {e}")
+        
+        print(f"[tts] WARNING: Prompt WAV not found: {relative_path}, using default prompt")
+        return default_prompt
 
     def unload_model(self) -> None:
         """Unload model to free memory."""

@@ -2,11 +2,19 @@
 
 Usage:
     python scripts/setup_env.py [--force-cpu] [--force-rocm] [--force-cuda]
+
+IMPORTANT: CosyVoice3 requires Python 3.10-3.12 and PyTorch 2.3.1.
+           Python 3.13+ is NOT compatible (no PyTorch 2.3.1 wheels).
 """
 
 import subprocess
 import sys
 import argparse
+
+
+# Minimum and maximum supported Python versions for CosyVoice3
+PYTHON_MIN = (3, 10)
+PYTHON_MAX = (3, 12)
 
 
 def detect_gpu():
@@ -52,28 +60,48 @@ def detect_gpu():
     return "cpu", "No compatible GPU detected"
 
 
+# IMPORTANT: PyTorch version MUST match CosyVoice3 requirements (torch==2.3.1).
+# Using a newer version (e.g. 2.6.x) causes garbled audio output due to
+# autocast behavior changes and internal tensor operation differences.
+TORCH_VERSION = "2.3.1"
+
 TORCH_URLS = {
-    "rocm": "https://download.pytorch.org/whl/rocm6.4",
-    "cuda": "https://download.pytorch.org/whl/cu118",
+    "rocm": "https://download.pytorch.org/whl/rocm6.0",
+    "cuda": "https://download.pytorch.org/whl/cu121",
     "cpu": "https://download.pytorch.org/whl/cpu",
+}
+
+# Chinese mirror fallback (used when download.pytorch.org has SSL issues)
+TORCH_MIRROR_URLS = {
+    "rocm": "https://mirror.sjtu.edu.cn/pytorch-wheels/rocm6.0/",
+    "cuda": "https://mirror.sjtu.edu.cn/pytorch-wheels/cu121/",
+    "cpu": "https://mirror.sjtu.edu.cn/pytorch-wheels/cpu/",
 }
 
 
 def install_pytorch(backend: str):
     """Install PyTorch with the appropriate backend."""
     index_url = TORCH_URLS[backend]
-    packages = ["torch", "torchaudio"]
+    mirror_url = TORCH_MIRROR_URLS[backend]
+    packages = [f"torch=={TORCH_VERSION}", f"torchaudio=={TORCH_VERSION}"]
     if backend != "cpu":
-        packages.append("torchvision")
+        packages.append(f"torchvision=={TORCH_VERSION}")
 
-    cmd = [
-        sys.executable, "-m", "pip", "install",
-        *packages,
-        "--index-url", index_url,
-    ]
-    print(f"\n[setup] Installing PyTorch ({backend})...")
-    print(f"[setup] Command: {' '.join(cmd)}\n")
-    subprocess.check_call(cmd)
+    # Try official index first, fall back to Chinese mirror
+    for url in [index_url, mirror_url]:
+        cmd = [
+            sys.executable, "-m", "pip", "install",
+            *packages,
+            "--index-url", url,
+        ]
+        print(f"\n[setup] Installing PyTorch {TORCH_VERSION} ({backend})...")
+        print(f"[setup] Command: {' '.join(cmd)}\n")
+        try:
+            subprocess.check_call(cmd)
+            return
+        except subprocess.CalledProcessError:
+            print(f"[setup] Failed with {url}, trying next mirror...")
+    raise RuntimeError("Failed to install PyTorch from all sources")
 
 
 def install_requirements():
@@ -133,6 +161,21 @@ def main():
     print("  AI Dubber - Environment Setup")
     print("=" * 60)
 
+    # Check Python version compatibility
+    py_ver = sys.version_info[:2]
+    if py_ver > PYTHON_MAX or py_ver < PYTHON_MIN:
+        print(f"\n[setup] ERROR: Python {py_ver[0]}.{py_ver[1]} is not compatible!")
+        print(f"[setup] CosyVoice3 requires Python {PYTHON_MIN[0]}.{PYTHON_MIN[1]}-{PYTHON_MAX[0]}.{PYTHON_MAX[1]}")
+        print(f"[setup] PyTorch {TORCH_VERSION} does not have wheels for Python {py_ver[0]}.{py_ver[1]}")
+        print(f"\n[setup] Please install Python 3.11 from https://www.python.org/downloads/")
+        print(f"[setup] Then recreate the venv:")
+        print(f"        py -3.11 -m venv .venv")
+        print(f"        .venv\\Scripts\\activate")
+        print(f"        python scripts/setup_env.py")
+        sys.exit(1)
+
+    print(f"\n[setup] Python version: {py_ver[0]}.{py_ver[1]} (OK)")
+
     # Determine backend
     if args.force_cpu:
         backend, gpu_name = "cpu", "Forced CPU mode"
@@ -146,15 +189,19 @@ def main():
     print(f"\n[setup] Detected GPU: {gpu_name}")
     print(f"[setup] Selected backend: {backend}")
 
-    # Install
+    # Install — PyTorch first (to avoid dependency resolver pulling wrong versions)
+    install_pytorch(backend)
     if not args.skip_requirements:
         install_requirements()
-    install_pytorch(backend)
     verify_installation(backend)
 
     print(f"\n{'=' * 60}")
     print(f"  Setup complete! Backend: {backend}")
     print(f"{'=' * 60}")
+    print("\nNext steps:")
+    print("1. Download CosyVoice3 model: python download_cosyvoice3.py")
+    print("2. Download Wav2Lip model (optional): python download_wav2lip.py")
+    print("3. Start the server: python src/api/server.py")
 
 
 if __name__ == "__main__":

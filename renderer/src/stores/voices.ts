@@ -67,32 +67,65 @@ export const useVoicesStore = create<VoicesState>((set, get) => ({
 
   previewVoice: async (id, text) => {
     const port = window.electronAPI?.getEnginePort() ?? 18432;
+    console.log(`[voices] Sending preview request for voice_id: ${id} to port: ${port}`);
     try {
       const body: any = {};
       if (text) {
         body.text = text;
       }
+      console.log(`[voices] Request body:`, body);
       const res = await fetch(`http://127.0.0.1:${port}/api/voices/${id}/preview`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
+      console.log(`[voices] Response status: ${res.status}, ok: ${res.ok}`);
       if (res.ok) {
         const contentType = res.headers.get('content-type') || '';
+        console.log(`[voices] Content-Type: ${contentType}`);
         if (contentType.includes('audio/')) {
           const blob = await res.blob();
+          console.log(`[voices] Audio blob size: ${blob.size} bytes`);
           const url = URL.createObjectURL(blob);
+          console.log(`[voices] Created object URL: ${url}`);
           const audio = new Audio(url);
-          audio.play();
-          audio.onended = () => URL.revokeObjectURL(url);
+          
+          // 等待音频加载完成
+          audio.oncanplaythrough = async () => {
+            console.log(`[voices] Audio can play through, starting playback`);
+            try {
+              await audio.play();
+              console.log(`[voices] Audio playback started`);
+            } catch (playErr) {
+              console.error('[voices] Audio play error:', playErr);
+              alert('试听失败，可能是浏览器限制或音频格式问题');
+              URL.revokeObjectURL(url);
+            }
+          };
+          
+          audio.onended = () => {
+            console.log(`[voices] Audio playback ended`);
+            URL.revokeObjectURL(url);
+          };
+          audio.onerror = (e) => {
+            console.error('[voices] Audio error:', e);
+            alert('试听失败，音频加载错误');
+            URL.revokeObjectURL(url);
+          };
+          
+          // 触发音频加载
+          console.log(`[voices] Loading audio...`);
+          audio.load();
         } else {
           const data = await res.json();
+          console.log(`[voices] Non-audio response:`, data);
           if (!data.success && data.error) {
             alert(data.error.message || '试听失败');
           }
         }
       } else {
         const data = await res.json().catch(() => ({}));
+        console.error(`[voices] Error response:`, data);
         alert(data.error?.message || '试听失败，请稍后重试');
       }
     } catch (err) {
