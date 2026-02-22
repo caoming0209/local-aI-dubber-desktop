@@ -1,4 +1,4 @@
-﻿# CLAUDE.md
+# CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -21,7 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 构建 | Vite 6 | 6.x |
 | 核心引擎 | Python 3.11 + FastAPI + uvicorn | |
 | 口型同步 | Wav2Lip（v1.0）→ MuseTalk（v2.0 路线图） | |
-| 语音合成 | CosyVoice 2（主）、MB-iSTFT-VITS2（低配备选） | |
+| 语音合成 | CosyVoice3-0.5B（主）、MB-iSTFT-VITS2（低配备选） | |
 | 视频合成 | FFmpeg（ffmpeg-python 封装） | 6.x+ |
 | 存储 | SQLite（stdlib sqlite3，无 ORM）+ JSON 文件 | |
 | 打包 | electron-builder（前端）+ PyInstaller（Python）+ Nuitka（仅 license 模块） | |
@@ -31,7 +31,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 应用采用双进程架构：
 1. **Electron + React 19 前端** — UI 层，左侧固定菜单 + 右侧内容区布局；前端基于谷歌 AI 生成的初始项目继续开发
-2. **Python 后端** — 本地推理引擎，负责 TTS（CosyVoice 2）、口型同步（Wav2Lip）和 FFmpeg 视频合成
+2. **Python 后端** — 本地推理引擎，负责 TTS（CosyVoice3-0.5B）、口型同步（Wav2Lip）和 FFmpeg 视频合成
 
 ### IPC 通信模式
 
@@ -45,7 +45,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```
 文案输入 → 文案优化（自动断句、口语化改写）
-    → TTS 模型（CosyVoice 2，生成 WAV 24kHz → FFmpeg 重采样 16kHz）
+    → TTS 模型（CosyVoice3-0.5B，生成 WAV 24kHz → FFmpeg 重采样 16kHz）
     → Wav2Lip（语音与数字人视频口型同步）
     → FFmpeg（合成背景、字幕、BGM）
     → 输出 MP4 → 同步至作品库
@@ -115,7 +115,7 @@ python-engine/                       # Python 推理引擎
 │   │   ├── server.py                # FastAPI 入口（随机端口，stdout 输出端口号）
 │   │   └── routes/                  # pipeline, tts, lipsync, synthesis, works, models, license, system
 │   ├── core/
-│   │   ├── tts_engine.py            # CosyVoice 2 / VITS 封装
+│   │   ├── tts_engine.py            # CosyVoice3-0.5B / VITS 封装
 │   │   ├── lipsync_engine.py        # Wav2Lip 封装
 │   │   ├── video_synthesizer.py     # FFmpeg 流水线
 │   │   ├── model_manager.py         # 模型下载、校验、删除
@@ -302,7 +302,7 @@ interface LicenseState {
 | 决策 | 选型 | 核心理由 |
 |------|------|----------|
 | IPC 通信 | FastAPI HTTP + SSE | 一次性调用与进度流分离；绑定 127.0.0.1 无防火墙问题；可 curl 调试 |
-| 中文 TTS | CosyVoice 2 + VITS 备选 | 中文质量最优；Instruct 情感控制；纯 PyTorch 无框架冲突 |
+| 中文 TTS | CosyVoice3-0.5B + VITS 备选 | 中文质量最优；Instruct 情感控制；纯 PyTorch 无框架冲突 |
 | 存储 | SQLite + JSON config blob | 索引查询满足搜索筛选；无 ORM；config blob 简化重编辑 |
 | 授权 | 一次联网激活 + AES-256-GCM + 硬件指纹 | 服务端强制设备限制（每码 2 台）；机器绑定防文件复制；激活后永久离线 |
 | 前端 | React 19 + Tailwind + Zustand | 复用 AI 生成初始项目；React 训练数据最丰富；Tailwind 无组件库学习成本 |

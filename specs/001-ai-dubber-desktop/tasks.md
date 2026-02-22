@@ -91,11 +91,11 @@
 
 ### 后端：视频生成流水线
 
-- [X] T023 [P] [US1] 实现 TTS 引擎封装 python-engine/src/core/tts_engine.py：CosyVoice 2 推理接口（输入文案+音色+语速/音量/情感参数 → 输出 WAV 24kHz），FFmpeg 重采样至 16kHz，支持 GPU/CPU 双模式
+- [X] T023 [P] [US1] 实现 TTS 引擎封装 python-engine/src/core/tts_engine.py：CosyVoice3-0.5B 推理接口（输入文案+音色+语速/音量/情感参数 → 输出 WAV 24kHz），FFmpeg 重采样至 16kHz，支持 GPU/CPU 双模式
 - [X] T024 [P] [US1] 实现口型同步引擎封装 python-engine/src/core/lipsync_engine.py：Wav2Lip 推理接口（输入视频+音频 → 输出口型同步视频），支持 GPU/CPU 双模式
 - [X] T025 [P] [US1] 实现 FFmpeg 视频合成器 python-engine/src/core/video_synthesizer.py：合成背景（纯色/场景/自定义图片）、叠加字幕（字体/字号/颜色/位置）、混入 BGM（音量比例控制）、输出 1080P MP4
 - [X] T026 [P] [US1] 实现 GPU 检测器 python-engine/src/core/gpu_detector.py：检测 CUDA 可用性、显卡型号、显存大小、推荐推理模式（auto/cpu/gpu）
-- [X] T112 [US1] 实现流水线模型预检与自动下载 python-engine/src/core/model_manager.py 补充：pipeline 启动前检测 CosyVoice 2 和 Wav2Lip 模型是否已下载，未下载时自动触发下载并通过 SSE 推送下载进度（FR-091），下载完成后继续执行流水线；模型缺失且用户取消下载时返回 MODEL_NOT_FOUND 错误
+- [X] T112 [US1] 实现流水线模型预检与自动下载 python-engine/src/core/model_manager.py 补充：pipeline 启动前检测 CosyVoice3-0.5B 和 Wav2Lip 模型是否已下载，未下载时自动触发下载并通过 SSE 推送下载进度（FR-091），下载完成后继续执行流水线；模型缺失且用户取消下载时返回 MODEL_NOT_FOUND 错误
 - [X] T027 [US1] 实现单条生成流水线路由 python-engine/src/api/routes/pipeline.py：POST /api/pipeline/single（接收完整配置，创建 job，返回 job_id 202）、GET /api/pipeline/progress/{job_id}（SSE 进度流，按 contracts/ipc-api.md 格式：script_optimization→tts→lipsync→synthesis→completed/failed）、POST /api/pipeline/pause/{job_id}、POST /api/pipeline/resume/{job_id}、POST /api/pipeline/cancel/{job_id}
 - [X] T028 [US1] 实现作业状态查询路由 python-engine/src/api/routes/pipeline.py：GET /api/jobs/{job_id}/state 返回作业当前状态快照（status/current_step/progress），用于 SSE 断连恢复
 - [X] T029 [US1] 实现作品写入 python-engine/src/storage/works_repo.py：视频生成成功后写入 works 表和 project_configs 表（关联 FK），提取首帧封面图

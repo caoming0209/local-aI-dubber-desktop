@@ -5,12 +5,12 @@
 
 ## Summary
 
-构建「智影口播 · AI数字人视频助手」Windows 桌面客户端，实现从文案输入到数字人口播视频的全本地离线生成。采用双进程架构：Electron + React 19 前端（样式：Tailwind CSS，状态：Zustand）负责 UI 交互，Python 推理引擎负责 TTS 语音合成（CosyVoice 2）、口型同步（v1.0 Wav2Lip，v2.0 升级 MuseTalk）、FFmpeg 视频合成。两进程通过本地 HTTP + SSE（Server-Sent Events）通信——CRUD/设置类调用走 REST，长耗时任务（合成流水线）走 SSE 实时推送进度。license 模块以 Nuitka 编译为原生扩展，提供更强防逆向保护。产品包含 9 大功能模块（含授权激活），以 Electron + Python 打包为 .exe 安装包分发。前端基于谷歌 AI 生成的 React 19 初始项目（`智影口播-·-ai数字人视频助手/`）继续开发。
+构建「智影口播 · AI数字人视频助手」Windows 桌面客户端，实现从文案输入到数字人口播视频的全本地离线生成。采用双进程架构：Electron + React 19 前端（样式：Tailwind CSS，状态：Zustand）负责 UI 交互，Python 推理引擎负责 TTS 语音合成（CosyVoice3-0.5B）、口型同步（v1.0 Wav2Lip，v2.0 升级 MuseTalk）、FFmpeg 视频合成。两进程通过本地 HTTP + SSE（Server-Sent Events）通信——CRUD/设置类调用走 REST，长耗时任务（合成流水线）走 SSE 实时推送进度。license 模块以 Nuitka 编译为原生扩展，提供更强防逆向保护。产品包含 9 大功能模块（含授权激活），以 Electron + Python 打包为 .exe 安装包分发。前端基于谷歌 AI 生成的 React 19 初始项目（`智影口播-·-ai数字人视频助手/`）继续开发。
 
 ## Technical Context
 
 **Language/Version**: JavaScript/TypeScript (Electron 40+, React 19, Node 20 LTS) + Python 3.11
-**Primary Dependencies**: Electron, React 19, React Router v7, Zustand, Vite 6, Tailwind CSS, Lucide React; Python: FastAPI, Wav2Lip（v1.0）, CosyVoice 2（主 TTS）, VITS（低配备选 TTS）, FFmpeg-python, SQLite3, cryptography; 打包保护: electron-builder, PyInstaller, Nuitka（仅 license 模块）
+**Primary Dependencies**: Electron, React 19, React Router v7, Zustand, Vite 6, Tailwind CSS, Lucide React; Python: FastAPI, Wav2Lip（v1.0）, CosyVoice3-0.5B（主 TTS）, VITS（低配备选 TTS）, FFmpeg-python, SQLite3, cryptography; 打包保护: electron-builder, PyInstaller, Nuitka（仅 license 模块）
 **Storage**: SQLite（作品库 + 项目配置快照）; JSON 文件（应用设置、授权状态）; 本地文件系统（视频、模型、缩略图、BGM）
 **Testing**: Vitest + React Testing Library（前端单元）; Playwright（E2E/Electron）; pytest（Python 后端）
 **Target Platform**: Windows 10/11 64-bit 桌面应用，以 electron-builder 打包为 NSIS 安装包
@@ -146,7 +146,7 @@ shared/                              # 前后端共享类型定义
 
 | 决策 | 原因 | 更简单方案被拒原因 |
 |------|----|------------------|
-| 双进程架构（Electron + Python） | Python 生态有 Wav2Lip、CosyVoice 2 等成熟 AI 推理库，JS 生态缺乏等价替代 | 纯 Electron + WASM：AI 模型无法高效运行；纯 Python GUI（tkinter/PyQt）：开发体验差，跨平台 UI 弱 |
+| 双进程架构（Electron + Python） | Python 生态有 Wav2Lip、CosyVoice3-0.5B 等成熟 AI 推理库，JS 生态缺乏等价替代 | 纯 Electron + WASM：AI 模型无法高效运行；纯 Python GUI（tkinter/PyQt）：开发体验差，跨平台 UI 弱 |
 | HTTP + SSE 通信 | 同时支持 REST 简单调用和流式进度推送，无需引入 WebSocket 框架 | stdin/stdout JSON-RPC：不支持并发请求，进度流处理复杂；纯 polling：延迟高，CPU 开销大 |
 | SQLite 作品库 | 支持 SQL 搜索、筛选、排序，500+ 条数据下性能好 | JSON 文件：查询需全量加载，无法高效筛选 |
 | 激活码 + 一次联网激活 | 防止多设备共享，硬件绑定不可被简单绕过 | 纯本地验证（无服务器）：激活码可被逆向后批量生成 |

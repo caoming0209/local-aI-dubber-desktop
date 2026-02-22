@@ -36,11 +36,11 @@
 ## Topic 2: 本地中文 TTS 模型选型（离线）
 
 ### Decision
-**主选：CosyVoice 2（阿里巴巴达摩院）；备选：MB-iSTFT-VITS2（低配机器回退方案）**
+**主选：CosyVoice3-0.5B（阿里巴巴达摩院）；备选：MB-iSTFT-VITS2（低配机器回退方案）**
 
 **推荐音色映射**：
 
-| 产品分类 | CosyVoice 2 对应 |
+| 产品分类 | CosyVoice3-0.5B 对应 |
 |----------|-----------------|
 | 男声-沉稳 | `zh_male_zhongnian` 预设 |
 | 女声-甜美 | `zh_female_xinliu` 预设 |
@@ -49,12 +49,12 @@
 
 **输出流水线**：
 ```
-CosyVoice2.synthesize(text, speaker, speed_ratio)
+CosyVoice3.synthesize(text, speaker, speed_ratio)
   → WAV 24kHz → FFmpeg 音量归一化 + 重采样 16kHz → Wav2Lip 输入
 ```
 
 ### Rationale
-1. **语音质量**：CosyVoice 2 在中文 Mandarin MOS 评测中高于 PaddleSpeech，接近商业 API
+1. **语音质量**：CosyVoice3-0.5B 在中文 Mandarin MOS 评测中高于 PaddleSpeech，接近商业 API
 2. **情感控制**：Instruct 模式通过自然语言指令控制语速、情感、停顿（`[laughter]`、`[breath]`），直接满足 PRD 中情感强度调节需求
 3. **零样本克隆**：3 秒参考音频即可克隆声音，为后续「自定义音色」功能预留扩展能力
 4. **推理速度**：GPU（RTX 3060）约 15-20x 实时倍率（30 秒文本 ~1.5 秒合成）；CPU（i7）约 3-5x 实时（~8-10 秒），桌面应用可接受
@@ -67,7 +67,7 @@ CosyVoice2.synthesize(text, speaker, speed_ratio)
 | 方案 | 结论 | 拒绝原因 |
 |------|------|----------|
 | PaddleSpeech | 拒绝 | 需引入 PaddlePaddle（额外 2-3 GB 依赖），与已有 PyTorch（Wav2Lip）框架冲突；Windows CUDA 支持历史不稳定 |
-| Coqui TTS（XTTSv2） | 拒绝 | 项目已于 2024 年 1 月停止维护；中文质量低于 CosyVoice 2 |
+| Coqui TTS（XTTSv2） | 拒绝 | 项目已于 2024 年 1 月停止维护；中文质量低于 CosyVoice3-0.5B |
 | edge-tts | 已排除 | 需要联网（Azure API），违反离线要求 |
 | ChatTTS | 不推荐 | 针对短对话优化，长文案稳定性差；说话人控制有限 |
 | GPT-SoVITS | 仅适用自定义音色 | 零样本克隆优秀，但作为主 TTS 引擎配置复杂；可作为「自定义音色克隆」的后期功能 |
@@ -267,7 +267,7 @@ aes_key = hashlib.pbkdf2_hmac('sha256', fingerprint.encode(), SALT, 100_000, dkl
 | 主题 | 决策 | 核心理由 |
 |------|------|----------|
 | IPC 通信 | FastAPI HTTP + SSE | 一次性调用与进度流分离；可调试；无管道帧协议 |
-| 中文 TTS | CosyVoice 2（主）+ VITS（低配备选） | 中文质量最优；Instruct 情感控制；纯 PyTorch 无框架冲突 |
+| 中文 TTS | CosyVoice3-0.5B（主）+ VITS（低配备选） | 中文质量最优；Instruct 情感控制；纯 PyTorch 无框架冲突 |
 | 存储 | SQLite（stdlib sqlite3）+ JSON config blob | 索引查询满足搜索筛选；无 ORM 依赖；config blob 简化重编辑 |
 | 授权激活 | 一次联网激活 + AES-256-GCM 本地文件 + CPU/主板/硬盘指纹 | 服务端强制设备限制；机器绑定防文件复制；激活后永久离线 |
 | 前端框架 & 样式 | React 19 + Tailwind CSS + Zustand + React Router v7 | 复用谷歌 AI 生成的初始项目；React 训练数据最丰富；Tailwind 无组件库 API 学习成本 |

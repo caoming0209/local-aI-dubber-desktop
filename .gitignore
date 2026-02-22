@@ -56,4 +56,5 @@ python-engine/%USERPROFILE%/
 # Temporary files
 *.tmp
 *.bak
-
+# Python Data
+python-engine/data/
