@@ -1,129 +1,50 @@
-<!--
-同步影响报告
-============
-版本变更：1.0.0 → 1.0.1（PATCH：内容语言从英文改为中文，无原则变更）
-修改原则：无（纯语言翻译，语义不变）
-新增章节：无
-删除章节：无
-模板更新：
-  - .specify/templates/plan-template.md  ✅ Constitution Check 已与原则对齐
-  - .specify/templates/spec-template.md  ✅ 无需变更
-  - .specify/templates/tasks-template.md ✅ 无需变更
-  - CLAUDE.md                            ✅ 已在前序步骤更新
-延迟事项：无
--->
+# [PROJECT_NAME] Constitution
+<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
 
-# 智影口播 项目规范（Constitution）
+## Core Principles
 
-## 核心原则
+### [PRINCIPLE_1_NAME]
+<!-- Example: I. Library-First -->
+[PRINCIPLE_1_DESCRIPTION]
+<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
 
-### 一、离线优先（不可妥协）
+### [PRINCIPLE_2_NAME]
+<!-- Example: II. CLI Interface -->
+[PRINCIPLE_2_DESCRIPTION]
+<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
 
-产品所有核心功能——视频生成、作品库管理、设置配置、数字人管理——在完成一次性激活和模型下载后，**必须**在无网络环境下正常运行。允许联网的场景仅限以下三种：
+### [PRINCIPLE_3_NAME]
+<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
+[PRINCIPLE_3_DESCRIPTION]
+<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
 
-1. 授权激活（首次激活或设备迁移）
-2. 模型文件下载（由用户在设置页主动触发）
-3. 更新检查（由用户在设置页主动触发）
+### [PRINCIPLE_4_NAME]
+<!-- Example: IV. Integration Testing -->
+[PRINCIPLE_4_DESCRIPTION]
+<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
 
-用户的文案内容、生成视频及任何使用数据**绝对禁止**上传至任何远程服务器。
-任何隐性依赖网络的功能均视为违反本原则。
+### [PRINCIPLE_5_NAME]
+<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
+[PRINCIPLE_5_DESCRIPTION]
+<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
 
-**原因**：产品的核心价值主张是本地、私密的 AI 生成。破坏离线能力等同于违背对每位网络受限用户的产品承诺。
+## [SECTION_2_NAME]
+<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
 
-### 二、双进程契约隔离
+[SECTION_2_CONTENT]
+<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
 
-Electron/React 前端与 Python 推理后端**必须**仅通过 `specs/*/contracts/ipc-api.md` 和 `specs/*/contracts/license.md` 中定义的版本化 HTTP + SSE IPC 契约进行通信，不允许任何其他形式的耦合：
+## [SECTION_3_NAME]
+<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
 
-- 前端**禁止**直接调用 Python 模块、引入 Python 代码或读取后端内部数据文件。
-- 后端**禁止**直接操作 Electron 窗口状态或渲染进程 DOM。
-- 生成视频的文件路径以字符串形式通过 API 传递；实际文件 I/O 操作必须在各自进程内完成。
-- 任何 IPC 契约的变更**必须**先更新 `contracts/` 文档，再进行代码修改。
+[SECTION_3_CONTENT]
+<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
 
-**原因**：契约隔离使 Python 引擎可独立升级（如 Wav2Lip → MuseTalk），无需改动前端代码，反之亦然。同时，SSE 进度协议也可独立测试。
+## Governance
+<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-### 三、数据域单一权威来源
+[GOVERNANCE_RULES]
+<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
 
-每个数据域**必须**有且仅有一个权威存储位置：
-
-| 数据域 | 权威来源 |
-|--------|---------|
-| 作品库 + 项目配置快照 | SQLite（`dubber.db`） |
-| 应用设置 | `settings.json` |
-| 授权 / 激活状态 | `license.dat`（AES-256-GCM 加密） |
-| 模型文件 | 本地文件系统（用户配置路径） |
-| 数字人视频文件 | 本地文件系统（用户配置路径） |
-
-允许基于权威来源派生缓存或二级索引，但**写入操作必须先写入权威来源**。
-前端**禁止**维护与后端 SQLite 记录不同步的作品库本地副本。
-
-**原因**：重复状态是同类桌面 AI 应用中数据一致性缺陷的主要根源。单一权威来源从根本上消除了"脏数据"类 Bug。
-
-### 四、AI 代码生成友好性
-
-技术选型**必须**将 AI 代码生成质量作为一等约束条件，与正确性和性能并列考量。评估新库或框架时：
-
-- 优先选择在公开 AI 训练数据中有大量示例的技术（高 Star 数、稳定 API、较长发布历史）。
-- 客观上效果更优的新方案（如 MuseTalk 效果优于 Wav2Lip）**应当**以路线图方式纳入——v1.0 使用经过验证的方案，升级路径有文档记录且接口设计为可替换。
-- 任何在 AI 生成质量上得分较低的选型，**必须**在计划的"复杂度追踪"章节中说明被拒绝的更优备选方案及其原因。
-
-**原因**：本项目主要依赖 AI 辅助编码。为不熟悉的库调试 AI 幻觉 API 用法浪费的每一小时都是交付速度的直接损耗。
-
-### 五、与威胁模型匹配的安全措施
-
-安全措施**必须**与威胁模型相匹配：防范普通用户分享激活码，而非专业逆向工程师。具体要求：
-
-- 授权逻辑**必须**编译为原生代码（Nuitka），将逆向门槛提升到简单字节码提取之上。
-- `license.dat` **必须**使用由设备硬件指纹（CPU + 主板 + 主硬盘）派生的密钥进行 AES-256-GCM 加密，使复制文件到其他机器时静默失败并重置为试用状态。
-- Python 引擎**必须**通过 PyInstaller 打包；`.py` 源文件不得随安装包分发。
-- **禁止**采用对用户体验有显著负面影响的安全手段（硬件加密狗、每次启动联网验证、常驻后台服务）。
-- 用户数据隐私：应用程序**绝对禁止**将生成的文案、视频或个人设置传输至任何远程服务器。
-
-**原因**：对消费级桌面应用过度设计安全机制会损害用户信任，增加支持成本；安全设计不足则导致激活码被随意分享，损害商业利益。威胁模型是普通用户，而非国家级对手。
-
-## 性能标准
-
-所有面向用户的操作**必须**在最低支持硬件（Intel i5、8 GB RAM、仅 CPU 推理）上满足以下响应时间目标：
-
-| 操作 | 目标 |
-|------|------|
-| 不涉及 AI 推理的任何 UI 交互 | ≤ 1 秒 |
-| SSE 进度事件投递延迟 | ≤ 200 毫秒 |
-| 作品库搜索 / 筛选（500 条数据） | ≤ 1 秒 |
-| 应用启动至可交互状态 | ≤ 10 秒 |
-| 视频生成进度汇报粒度 | ≥ 4 个独立步骤 |
-
-无法在最低配置硬件上达到上述目标的操作，**必须**在用户可感知延迟前（启动后 100 毫秒内）呈现进度指示器。
-
-## 开发规范
-
-以下规范适用于本项目所有代码编写工作：
-
-1. **契约先行**：任何跨越 Electron–Python 边界的实现代码编写前，必须先在 `contracts/` 中定义或更新对应 API 契约。
-
-2. **依赖纪律**：新增 Python 包必须添加到 `requirements.txt` 并锁定主版本号。新增前端包必须评估与 Tailwind CSS 的兼容性（避免引入冲突的 CSS Reset 或 CSS-in-JS 库）。
-
-3. **禁止隐性云端依赖**：任何构造外部 HTTP 请求的代码（激活服务器和模型下载端点除外），均需经过明确的规范审查。
-
-4. **分层测试覆盖**：spec.md 中的每个用户故事必须有至少一个可独立运行的验收测试（UI 流程用 Playwright E2E，Python 引擎流程用 pytest）。单元测试推荐但非强制。
-
-5. **复杂度说明**：超出当前用户故事最低需求的架构决策（新增依赖、进程或抽象层）**必须**在计划的"复杂度追踪"章节中注明所拒绝的更简单方案及其不足之处。
-
-6. **禁止 CDN Tailwind 打包**：在生成任何 Electron 构建包前，`index.html` 中的 Tailwind CDN `<script>` 标签**必须**替换为 npm 包方式，以确保离线兼容性。
-
-## 治理
-
-本规范凌驾于所有其他项目指导文档（包括 CLAUDE.md）之上。CLAUDE.md 作为快速参考摘要；本规范是项目原则的权威来源。
-
-**修订流程**：
-1. 在提交说明或 PR 描述中阐明变更及其理由。
-2. 更新 `constitution.md` 中的对应内容。
-3. 按语义化版本规则递增 `CONSTITUTION_VERSION`：
-   - MAJOR：删除或不兼容地重新定义某项原则。
-   - MINOR：新增原则或章节，或对现有内容有实质性扩充。
-   - PATCH：澄清说明、措辞优化、错别字修正。
-4. 将 `LAST_AMENDED_DATE` 更新为修订日期。
-5. 执行一致性传播检查：核查 plan-template.md、spec-template.md、tasks-template.md 及 CLAUDE.md 中是否有过时引用。
-
-**合规审查**：每份实施计划（plan.md）**必须**包含规范检查表，明确核查每项原则。未完成检查或存在未通过项的计划**不得**进入任务生成阶段。
-
-**版本**：1.0.1 | **批准日期**：2026-02-19 | **最后修订**：2026-02-19
+**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
+<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->

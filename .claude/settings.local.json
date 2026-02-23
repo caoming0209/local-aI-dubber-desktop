@@ -16,7 +16,10 @@
       "Bash(pwsh:*)",
       "Bash(command:*)",
       "Bash(powershell.exe:*)",
-      "Bash(git status:*)"
+      "Bash(git status:*)",
+      "Bash(.specify/scripts/powershell/create-new-feature.ps1:*)",
+      "Bash(true:*)",
+      "Bash(powershell:*)"
     ]
   }
 }
