@@ -12,7 +12,10 @@
       "Bash(where:*)",
       "Bash(py --list:*)",
       "Bash(py -3.11 --version:*)",
-      "Bash(d:/Git.Project/local-aI-dubber-desktop/python-engine/.venv/Scripts/python:*)"
+      "Bash(d:/Git.Project/local-aI-dubber-desktop/python-engine/.venv/Scripts/python:*)",
+      "Bash(pwsh:*)",
+      "Bash(command:*)",
+      "Bash(powershell.exe:*)"
     ]
   }
 }
