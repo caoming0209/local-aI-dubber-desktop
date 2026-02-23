@@ -20,7 +20,8 @@
       "Bash(.specify/scripts/powershell/create-new-feature.ps1:*)",
       "Bash(true:*)",
       "Bash(powershell:*)",
-      "Bash(/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe:*)"
+      "Bash(/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe:*)",
+      "Bash(.specify/scripts/powershell/check-prerequisites.ps1:*)"
     ]
   }
 }
