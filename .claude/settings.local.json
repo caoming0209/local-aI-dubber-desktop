@@ -15,7 +15,8 @@
       "Bash(d:/Git.Project/local-aI-dubber-desktop/python-engine/.venv/Scripts/python:*)",
       "Bash(pwsh:*)",
       "Bash(command:*)",
-      "Bash(powershell.exe:*)"
+      "Bash(powershell.exe:*)",
+      "Bash(git status:*)"
     ]
   }
 }
