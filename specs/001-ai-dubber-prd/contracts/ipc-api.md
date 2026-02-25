@@ -88,6 +88,29 @@ Event schema (example):
 
 Return job snapshot for reconnection/resume UI.
 
+#### GET `/jobs?status={status_list}`
+
+Return jobs matching given statuses (comma-separated). Used by UI on startup to detect unfinished batch jobs for resume prompt.
+
+**Query Parameters**
+
+- `status` (required): Comma-separated status values, e.g. `running,paused`
+
+**Response**: `200`
+
+```json
+[
+  {
+    "job_id": "batch_...",
+    "type": "batch",
+    "status": "running",
+    "cursor_index": 5,
+    "total_items": 30,
+    "created_at": "2026-02-24T10:00:00Z"
+  }
+]
+```
+
 ### Pipeline control
 
 - POST `/pipeline/pause/{job_id}`
@@ -103,3 +126,13 @@ Example:
 ```json
 {"error_code": "INVALID_SCRIPT", "message": "Script is empty"}
 ```
+
+### Error codes
+
+- `INVALID_SCRIPT` — 文案为空或不合规
+- `INVALID_IMAGE_FORMAT` — 图片格式不支持（仅 jpg/png）
+- `IMAGE_TOO_SMALL` — 图片分辨率不足
+- `RESOURCE_CRITICAL` — 资源压力达到危险阈值，附带降级建议
+- `MODEL_NOT_FOUND` / `MODEL_LOADING` / `MODEL_CORRUPTED` / `MODEL_DOWNLOAD_INCOMPLETE`
+- `GPU_UNAVAILABLE` / `INSUFFICIENT_DISK`
+- `NOT_FOUND` / `INTERNAL_ERROR`
