@@ -1,71 +1,105 @@
 # Implementation Plan: 智影口播 · AI数字人视频助手（Windows版）V1.3
 
-**Branch**: `001-ai-dubber-prd` | **Date**: 2026-02-24 | **Spec**: `specs/001-ai-dubber-prd/spec.md`
-**Input**: Feature specification (`specs/001-ai-dubber-prd/spec.md`) + 技术参考（`智影口播_技术方案_V1.0.md`）
-
-**Note**: This document is generated/maintained by the `/speckit.plan` workflow.
+**Branch**: `001-ai-dubber-prd` | **Date**: 2026-02-28 | **Spec**: `specs/001-ai-dubber-prd/spec.md`
+**Input**: Feature specification from `/specs/001-ai-dubber-prd/spec.md`
 
 ## Summary
 
-交付一个 Windows 10/11 离线可用的桌面端“AI 数字人口播视频助手”V1.3：用户可单条生成口播视频（1080P 默认、可切换 720P），支持字幕（外置字幕文件 + 视频内嵌硬字幕）、可取消、可观测进度与资源状态；并支持声音克隆生成可复用“声音模板”，以及批量生成（≤30 条、严格串行、异常退出后按条目续跑的断点续传）。
+实现 V1.3 核心闭环：离线单条/批量口播视频生成、声音克隆模板管理、字幕输出、资源监控与稳定性兜底。
 
-整体架构采用 Electron（主进程壳）+ React 渲染进程（UI）+ 本地 Python 引擎（FastAPI + SSE）双进程模型：核心推理与视频合成全部在本机离线完成；仅激活验证、模型下载、更新检查等能力在用户主动触发时联网。
+技术方案采用 Electron + React 19 前端 + Python FastAPI 本地推理引擎双进程架构，通过 HTTP REST + SSE 进行本地 IPC 通信。核心推理流水线为：文案自动拆分 → CosyVoice3-0.5B TTS → Wav2Lip 口型同步 → FFmpeg 视频合成 + 字幕。安装包内置核心模型确保开箱即离线可用。
+
+**前端基础项目已存在**：位于 `D:\Git.Project\智影口播-·-ai数字人视频助手`，由 Google AI Studio 生成的高保真原型。包含 5 个核心页面组件（SingleVideo、BatchVideo、VoiceManagement、TaskRecords、Settings）+ 布局组件（TopBar、Sidebar、RightSidebar），使用 React 19 + Tailwind CSS v4 + Lucide React。当前为纯 UI 原型（所有操作为 mock），需迁移至本仓库 `renderer/` 并进行架构升级。
 
 ## Technical Context
 
-**Language/Version**: TypeScript (Node.js 20) + Python 3.11
+**Language/Version**: TypeScript 5.x (Electron/React 前端) + Python 3.11 (推理引擎)
+**Primary Dependencies**: Electron 40+, React 19.2, Tailwind CSS 4.x, Zustand 5.x, React Router 7.x (HashRouter), Vite 6, Lucide React, FastAPI, uvicorn, CosyVoice3-0.5B, Wav2Lip, ffmpeg-python, Pillow
+**Storage**: SQLite (stdlib sqlite3, 无 ORM) + JSON 文件 + AES-256-GCM 加密文件
+**Testing**: Vitest + React Testing Library (前端), pytest (后端), Playwright (E2E)
+**Target Platform**: Windows 10/11 x64, .exe 安装包分发
+**Project Type**: desktop-app (Electron + Python 双进程)
+**Performance Goals**: 单条 1080P 生成中位数 ≤ 3min; SSE 进度延迟 ≤ 200ms; 资源状态更新 ≥ 0.5Hz; 应用启动 ≤ 10s
+**Constraints**: 全程离线可用; 批量 ≤ 30 条串行; 文案 ≤ 3000 字/任务, 120 字/段; 阻止并发生成; 资源超限自动暂停
+**Scale/Scope**: 单用户桌面应用; 作品库 500 条; 批量 ≤ 30 条; ~9 页面模块
 
-**Primary Dependencies**:
-- Electron 40+ + React 19.2 + Vite 6 + Tailwind CSS 4 + Zustand 5 + React Router v7
-- Python: FastAPI + uvicorn
-- ML runtime: PyTorch (engine inference)
-- Media: FFmpeg 6.x+
+## Existing Frontend Analysis
 
-**Storage**: SQLite（Python stdlib sqlite3）+ settings.json（本地 JSON）+ license.dat（AES-256-GCM）+ 本地文件系统（视频/模型/素材）
+### 源项目位置
 
-**Testing**: Vitest + React Testing Library（前端），pytest（后端），Playwright（E2E）
+`D:\Git.Project\智影口播-·-ai数字人视频助手` — Google AI Studio 生成的 React 19 原型项目。
 
-**Target Platform**: Windows 10/11 x64 桌面端（.exe 安装包）
+### 已有组件清单
 
-**Project Type**: desktop-app（Electron UI）+ local-engine（Python 推理/合成）
+| 组件 | 文件 | 状态 | 可复用度 |
+|------|------|------|----------|
+| TopBar | TopBar.tsx | UI 完成 | 高 — 保留布局，补充窗口控制 IPC |
+| Sidebar | Sidebar.tsx | UI 完成 | 中 — 需从 tab 切换改为 NavLink + HashRouter |
+| RightSidebar | RightSidebar.tsx | UI 完成 | 高 — 资源监控 UI 已实现，需接 SSE 数据源 |
+| SingleVideo | SingleVideo.tsx | UI 完成 | 高 — 核心制作页面骨架完整，需接真实 API + 扩展字数上限 |
+| BatchVideo | BatchVideo.tsx | UI 完成 | 高 — 批量制作+任务表格完整，需接 API + 断点续传逻辑 |
+| VoiceManagement | VoiceManagement.tsx | UI 完成 | 高 — 上传+提取+列表完整，需接 API + 名称唯一校验 |
+| TaskRecords | TaskRecords.tsx | UI 完成 | 高 — 历史记录表格完整，需接真实数据 |
+| Settings | Settings.tsx | UI 完成 | 高 — 设置页完整，需接 settings API + 补充推理模式选择 |
 
-**Performance Goals**:
-- 启动至可操作 ≤ 10s
-- SSE 进度推送延迟 ≤ 200ms
-- 作品库 500 条搜索 ≤ 1s
-- 单条生成关键操作响应 ≤ 1s
+### 缺失页面/组件
 
-**Constraints**:
-- 核心流程离线；联网能力（激活/模型下载/更新检查）必须与离线生成解耦
-- IPC 仅监听 `127.0.0.1:{random_port}`
-- 一次性调用 REST；长任务进度 SSE
-- 批量严格串行（同一时间仅运行 1 条）
-- 资源监控更新频率 ≥ 2s/次（CPU/内存/显存；CPU 模式显存 N/A）
-- 隐私默认不上传、不遥测
-- 目标硬件参考：8GB 显存 + 32GB 内存（来自 `智影口播_技术方案_V1.0.md` 的本地优化假设）
+| 缺失项 | 规格要求 | 优先级 |
+|--------|----------|--------|
+| Home（首页） | 快速入口 + 最近记录 + 教程引导 | P1 |
+| WorksLibrary（作品库） | 卡片式展示 + 搜索/筛选/排序 + 播放/删除 | P1 |
+| AvatarManager（数字人管理） | 官方 + 自定义上传 | P2 |
+| Help（帮助与反馈） | 教程 + FAQ + 客服入口 | P3 |
+| ActivationModal | 激活弹窗 | P3（V1.3 不实现，预留接口） |
+| ProgressBar | 可复用进度条组件 | P1 |
+| VideoPlayer | 视频播放器 | P1 |
 
-**Scale/Scope**:
-- 单机单用户
-- 批量单批 ≤ 30 条
-- 单段文案 120 字上限（自动拆分）
-- 声音克隆输入 ≥30s 且 ≤100MB
+### 架构迁移项
+
+| 现状 | 目标 | 影响范围 |
+|------|------|----------|
+| Tab 条件渲染（无路由） | React Router v7 HashRouter | App.tsx, Sidebar.tsx |
+| State 提升到 App.tsx | Zustand stores | 所有组件 |
+| setTimeout/setInterval mock | HTTP REST + SSE 真实 API | 所有交互组件 |
+| 无 Electron 集成 | preload contextBridge (window.electronAPI) | 文件操作、窗口控制 |
+| 文案上限 300 字 | 3000 字 (FR-020a) | SingleVideo.tsx |
+| 无持久化 | SQLite via Python 后端 | 全局 |
+| @google/genai 依赖 | 移除（离线产品不需要云端 AI） | package.json |
+| motion 动画库 | 评估保留或替换为 CSS transitions | package.json |
+
+### 样式系统
+
+已有项目使用的色彩系统与设计规范可直接复用：
+- 主色 `#2F80ED` (蓝)，成功 `#36D399` (绿)，危险 `#F87272` (红)
+- 卡片阴影 `shadow-[0_2px_8px_rgba(0,0,0,0.1)]`
+- 字体 "Microsoft YaHei", "Source Han Sans CN"
+- Tailwind CSS v4 (npm 包，非 CDN) ✅ 与规格一致
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-以下门禁来自 `.specify/memory/constitution.md`，本计划在设计阶段必须满足：
+### Pre-Research Gate
 
-- 离线闭环：单条/批量生成、字幕、作品访问在断网环境可用；联网能力与离线生成解耦，且 UI 明确标识
-- 隐私边界：默认不上传、不收集用户内容；不得引入默认遥测
-- IPC 边界与安全：仅绑定 `127.0.0.1:{random_port}`；一次性调用 REST；长任务进度 SSE；引擎就绪握手通过 stdout 输出端口
-- 作业可恢复：任务具备稳定 `job_id`；支持状态快照查询；批量断点续传按条目续跑（正在执行条目视为未完成，恢复从头重跑该条目）
-- 资源感知与稳定性：生成期展示 CPU/内存/显存（CPU 模式显存 N/A），更新频率 ≥ 2s/次；资源预警不遮挡核心操作；无法安全继续时可控降级/中断并给出可执行建议；批量严格串行
-- 最小复杂度：遵循既有 Electron/React + Python/FastAPI 目录与技术栈；避免跨层耦合与过度抽象；用户可见行为变更需可验证
+| # | 宪章原则 | 门禁项 | 状态 |
+|---|----------|--------|------|
+| I | 离线优先与隐私保护 | 核心生成闭环离线可用; 安装包内置模型 (FR-001/001a); 不收集不上传 (FR-002); 移除 @google/genai 云端依赖 | ✅ PASS |
+| II | 本地 IPC 边界与安全 | 仅绑定 127.0.0.1; SSE 进度流; stdout 握手; 输入边界校验 | ✅ PASS |
+| III | 可恢复作业与可观测进度 | job_id + state 快照; 每条状态展示; 取消需确认+清理; 按条目续跑 | ✅ PASS |
+| IV | 资源感知与稳定性优先 | RightSidebar 已有资源监控 UI; 需接 SSE 真实数据; 预警阈值; 自动暂停; 串行 | ✅ PASS |
+| V | 最小复杂度与可维护性 | 复用已有前端原型; 最小化迁移变更; 使用现有技术栈 | ✅ PASS |
 
-**Gate evaluation (pre-research)**: PASS（无新增架构违反项）
+### Post-Design Gate
 
-**Gate evaluation (post-design)**: PASS（见 `specs/001-ai-dubber-prd/research.md`）
+| # | 门禁项 | 设计产物验证 | 状态 |
+|---|--------|-------------|------|
+| I | 离线闭环 | data-model 无云端依赖; ipc-api 无外网调用; 模型内置; @google/genai 已列入移除项 | ✅ PASS |
+| II | IPC 安全 | ipc-api.md 仅 127.0.0.1; 所有输入有验证规则与错误码 | ✅ PASS |
+| III | 可恢复性 | jobs/batch_jobs/batch_items 表持久化; state 快照接口; resume 语义明确 | ✅ PASS |
+| IV | 资源稳定性 | SSE resource 字段; RESOURCE_CRITICAL 错误码; auto-pause 策略; 并发阻止 (JOB_ALREADY_RUNNING) | ✅ PASS |
+| V | 最小复杂度 | 复用已有 UI 组件; 无新框架引入; 新增 stores/services 层与规格架构一致 | ✅ PASS |
+
+**Result**: 所有门禁通过，无需 Complexity Tracking。
 
 ## Project Structure
 
@@ -73,91 +107,138 @@
 
 ```text
 specs/001-ai-dubber-prd/
-├── spec.md              # Feature spec
 ├── plan.md              # This file
-├── research.md          # Phase 0 output
-├── data-model.md        # Phase 1 output
-├── quickstart.md        # Phase 1 output
-├── contracts/           # Phase 1 output
-│   ├── ipc-api.md
-│   └── license.md
-└── tasks.md             # Phase 2 output (/speckit.tasks)
+├── research.md          # Phase 0: 技术决策研究
+├── data-model.md        # Phase 1: 数据模型定义
+├── quickstart.md        # Phase 1: 开发环境搭建指南
+├── contracts/
+│   ├── ipc-api.md       # Phase 1: 前后端 HTTP IPC 接口合约
+│   └── license.md       # Phase 1: 授权接口合约（草案，V1.3 不实现）
+└── tasks.md             # Phase 2: 任务清单（由 /speckit.tasks 生成）
 ```
 
 ### Source Code (repository root)
 
 ```text
-electron-app/
-  src/
-    main/
-      index.ts
-      python-manager.ts
-      ipc-bridge.ts
-    preload/
-      index.ts
+electron-app/                        # Electron 主进程（待创建）
+├── src/
+│   ├── main/
+│   │   ├── index.ts                 # 窗口管理、Python 子进程启动
+│   │   ├── python-manager.ts        # Python 进程生命周期（启动/握手/崩溃恢复）
+│   │   └── ipc-bridge.ts            # 主进程 IPC 路由（preload → HTTP 代理）
+│   └── preload/
+│       └── index.ts                 # contextBridge: window.electronAPI
+├── package.json
+└── electron-builder.yml
 
-renderer/
-  src/
-    App.tsx
-    main.tsx
-    components/
-    pages/
-    stores/
-    services/
+renderer/                            # React 19 渲染进程（从已有原型迁移）
+├── src/
+│   ├── App.tsx                      # [迁移] HashRouter + 路由配置（替换 tab 条件渲染）
+│   ├── main.tsx                     # [迁移] 渲染进程入口
+│   ├── index.css                    # [迁移] 全局样式（Tailwind + 自定义字体）
+│   ├── types.ts                     # [新建] RoutePath 枚举、共享实体接口
+│   ├── components/
+│   │   ├── layout/
+│   │   │   ├── Layout.tsx           # [新建] flex h-screen 主布局（TopBar + Sidebar + Content + RightSidebar）
+│   │   │   ├── TopBar.tsx           # [迁移] 顶部栏（补充 Electron 窗口控制 IPC）
+│   │   │   ├── Sidebar.tsx          # [迁移] 侧边栏（NavLink 替换 tab onClick）
+│   │   │   └── RightSidebar.tsx     # [迁移] 资源监控面板（接 SSE 真实数据）
+│   │   ├── ProgressBar.tsx          # [新建] 可复用生成进度条
+│   │   ├── VideoPlayer.tsx          # [新建] 视频播放器
+│   │   ├── ResourceWarning.tsx      # [新建] 资源预警非阻断提示
+│   │   └── ConfirmDialog.tsx        # [新建] 通用确认弹窗
+│   ├── pages/
+│   │   ├── Home.tsx                 # [新建] 首页（快速入口 + 最近记录 + 教程引导）
+│   │   ├── SingleCreation.tsx       # [迁移自 SingleVideo.tsx] 单条制作（文案上限→3000、接 API）
+│   │   ├── BatchCreation.tsx        # [迁移自 BatchVideo.tsx] 批量制作（接 API + 断点续传）
+│   │   ├── AvatarManager.tsx        # [新建] 数字人管理
+│   │   ├── VoiceManager.tsx         # [迁移自 VoiceManagement.tsx] 声音模板管理（接 API + 名称唯一）
+│   │   ├── WorksLibrary.tsx         # [新建] 作品库（卡片展示 + 搜索/筛选/排序）
+│   │   ├── Settings.tsx             # [迁移] 设置（接 API + 补充推理模式选择）
+│   │   └── Help.tsx                 # [新建] 帮助与反馈
+│   ├── stores/                      # [新建] Zustand 状态管理（替换 App.tsx state 提升）
+│   │   ├── project.ts               # 当前制作任务配置
+│   │   ├── jobs.ts                  # 单条/批量作业状态 + SSE 订阅
+│   │   ├── voice-templates.ts       # 声音模板列表与状态
+│   │   ├── works.ts                 # 作品库
+│   │   ├── resource-monitor.ts      # 资源监控状态（接 SSE）
+│   │   ├── license.ts               # 授权状态
+│   │   └── settings.ts              # 应用设置
+│   └── services/                    # [新建] HTTP API 调用封装
+│       ├── engine.ts                # 引擎通信基础层（通过 window.electronAPI 代理）
+│       ├── pipeline.ts              # 生成流水线 API + SSE 订阅
+│       ├── voice-templates.ts       # 声音模板 CRUD + SSE
+│       ├── works.ts                 # 作品库 API
+│       └── license.ts               # 授权 API
+├── index.html
+├── vite.config.ts
+├── tailwind.config.ts               # [迁移] Tailwind 配置（如有）
+└── package.json
 
-python-engine/
-  src/
-    api/
-      server.py
-      routes/
-    core/
-    storage/
-    license/
-    utils/
-  tests/
+python-engine/                       # Python 推理引擎（待创建）
+├── src/
+│   ├── api/
+│   │   ├── server.py                # FastAPI 入口（随机端口 + stdout 握手）
+│   │   └── routes/
+│   │       ├── pipeline.py          # /pipeline/* 生成流水线路由
+│   │       ├── jobs.py              # /jobs/* 作业查询路由
+│   │       ├── voice_templates.py   # /voice-templates/* 声音模板路由
+│   │       ├── works.py             # /works/* 作品库路由
+│   │       ├── models.py            # /models/* 模型管理路由
+│   │       ├── license.py           # /license/* 授权路由
+│   │       └── system.py            # /system/* + /settings 系统路由
+│   ├── core/
+│   │   ├── tts_engine.py            # CosyVoice3-0.5B / VITS 封装
+│   │   ├── lipsync_engine.py        # Wav2Lip 封装
+│   │   ├── video_synthesizer.py     # FFmpeg 流水线（合成+字幕+BGM）
+│   │   ├── voice_cloner.py          # 声音特征提取（CosyVoice speaker embedding）
+│   │   ├── script_splitter.py       # 文案自动拆分（120 字/段，自然断句）
+│   │   ├── image_processor.py       # 图片校验 + resize 512×512
+│   │   ├── subtitle_generator.py    # SRT 生成 + 硬字幕烧录
+│   │   ├── job_manager.py           # 作业调度（串行、并发阻止、暂停/恢复/取消）
+│   │   ├── resource_monitor.py      # CPU/内存/显存监控 + 预警阈值检测
+│   │   ├── model_manager.py         # 模型校验（启动快速校验 + 推理前完整校验）
+│   │   └── gpu_detector.py          # CUDA 检测 + 推理模式决策
+│   ├── storage/
+│   │   ├── database.py              # SQLite 连接 + PRAGMA user_version 迁移
+│   │   ├── works_repo.py            # 作品库数据访问
+│   │   ├── jobs_repo.py             # jobs/batch_jobs/batch_items 数据访问
+│   │   ├── voice_templates_repo.py  # 声音模板数据访问
+│   │   ├── settings_store.py        # JSON 设置读写
+│   │   └── migrations/              # V{NNN}__description.sql
+│   ├── license/
+│   │   ├── fingerprint.py           # 硬件指纹
+│   │   ├── validator.py             # 激活码验证
+│   │   └── store.py                 # AES-256-GCM 加密存储
+│   └── utils/
+│       ├── progress.py              # SSE 进度事件生成器
+│       └── file_utils.py            # 路径、缩略图、临时文件清理
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   └── conftest.py
+└── requirements.txt
 
-shared/
-  ipc-types.ts
+shared/                              # 前后端共享类型（待创建）
+└── ipc-types.ts                     # IPC 请求/响应 TypeScript 类型
 ```
 
-**Structure Decision**: 采用 Electron + React 作为 UI 层，Python(FastAPI) 作为本地推理/合成引擎；前后端通过本地 HTTP + SSE 通信，绑定 127.0.0.1 随机端口并以 stdout 握手完成端口发现。
+**Structure Decision**: 采用 CLAUDE.md 定义的三模块结构（electron-app / renderer / python-engine）。前端 `renderer/` 从已有原型项目迁移，保留已有组件的 UI/样式，替换架构层（路由→HashRouter、状态→Zustand、数据→HTTP API+SSE）。每个迁移文件标记为 `[迁移]`，新增文件标记为 `[新建]`。
 
-## 方案补充（参考 `智影口播_技术方案_V1.0.md`）
+### 前端迁移策略
 
-以下补充项来自 V1.0 技术方案的本地优化经验，但会按本项目宪章与 PRD 约束做取舍（离线优先、批量串行、最小复杂度）。
-
-### 1) 通信选型差异（WebSocket vs REST+SSE）
-
-- V1.0 提到 WebSocket 或 REST。
-- 本项目保持 **REST + SSE**：一次性调用与进度流分离，断线恢复与调试更直接；且与现有目录约束（FastAPI + SSE）一致。
-
-### 2) 资源与显存管理（Memory Guard 思路）
-
-- 每个重计算阶段（TTS、口型、合成）结束后执行显存与对象清理（例如 PyTorch 的 cache 清理），降低碎片化风险。
-- 资源采样（CPU/内存/显存）以 ≥2s/次节奏进入 SSE 事件，供前端展示与预警（与 FR-080/081 对齐）。
-- 当显存/内存压力持续高位时，优先采取”可控降级”策略：例如建议切换 720P、缩小批量规模、改为 CPU 模式。
-- 阈值参考（可调配置）：显存 ≥ 总量 90% → 预警 SSE（type=resource_warning）；显存 ≥ 95% 或连续 3 次采样高位 → 建议降级（RESOURCE_CRITICAL 错误码 + 附带建议）；可用磁盘 < 1GB → 阻断并提示清理。
-
-### 3) 阶段性 CPU Offload 与管线拆分
-
-- V1.0 建议部分环节转移到 CPU 以节省显存（例如人脸检测）。
-- 本项目保持：能在 CPU 上完成的轻量步骤优先 CPU（如人脸检测/裁剪、编码封装），GPU 主要用于模型推理阶段。
-
-### 4) 字幕策略补充
-
-- V1.0 使用 Whisper small 做字幕对齐。
-- V1.3 以“离线、最小复杂度”为优先：优先基于 TTS 的分段与音频时长生成字幕时间轴；ASR 对齐作为后续可选增强（若引入需评估模型体积与性能）。
-
-### 5) 画质增强（可选，不作为 V1.3 默认路径）
-
-- V1.0 提到 Real-ESRGAN/GFPGAN 等增强。
-- V1.3 默认不引入到主链路：避免增加模型体积与算力消耗；若未来引入，必须提供开关并默认关闭，且对低配设备可用。
+1. **代码迁入**：将 `D:\Git.Project\智影口播-·-ai数字人视频助手/src/` 内容复制到 `renderer/src/`
+2. **依赖清理**：移除 `@google/genai`、`express`、`better-sqlite3`（后端独立管理）；保留 `react`、`@tailwindcss/vite`、`lucide-react`、`vite`；新增 `zustand`、`react-router-dom`
+3. **路由迁移**：App.tsx 中 tab 条件渲染 → HashRouter + Route 配置 + Sidebar NavLink
+4. **状态迁移**：App.tsx 中 useState → Zustand stores（jobs、resource-monitor、settings 等）
+5. **API 接入**：setTimeout mock → services/ 层调用 window.electronAPI.engine.request()
+6. **组件重组**：SingleVideo→SingleCreation、BatchVideo→BatchCreation、VoiceManagement→VoiceManager（命名对齐 CLAUDE.md）
+7. **参数修正**：文案上限 300→3000、声音模板名称唯一校验、批量上限 30 条（已有）
 
 ## Complexity Tracking
 
-无需要豁免宪章门禁的复杂度引入项；本节不适用。
+> 所有宪章门禁通过，无需记录违规。
 
-## 范围排除说明
-
-- **授权模块（license）**：已有接口草案（`contracts/license.md`），V1.3 不实现；开发期间跳过授权检查（`NODE_ENV=development`）以保证离线闭环可验证。待后续迭代落地。
-- **作品库模块**：为已有模块，V1.3 不做功能性变更，但需确保离线可用（回归验证）。
+| Violation | Why Needed | Simpler Alternative Rejected Because |
+|-----------|------------|-------------------------------------|
+| (无) | — | — |

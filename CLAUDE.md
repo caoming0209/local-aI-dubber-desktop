@@ -55,8 +55,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 1. **首页** — 快速入口（新建视频/批量制作/查看作品）、最近 3 条记录、教程引导
 2. **单条制作** — 5 步向导：文案输入 → 语音选择 → 数字人选择 → 视频设置 → 生成视频
-3. **批量制作** — 导入 TXT 或多行输入（最多 100 条文案），统一配置后串行批量生成
-4. **数字人管理** — 官方数字人 + 自定义 MP4 上传（自动 Wav2Lip 适配）
+3. **批量制作** — 导入 TXT 或多行输入（最多 30 条文案），统一配置后串行批量生成
+4. **数字人管理** — V1.3 使用静态图片（JPG/PNG，自动 resize 为 512×512）作为 Wav2Lip 输入；官方数字人 + 自定义上传
 5. **音色管理** — 音色浏览、试听、收藏、模型下载（支持暂停/继续）与删除
 6. **作品库** — 卡片式展示（每页 12 条），支持搜索/筛选/排序、播放、重新编辑、批量删除
 7. **设置** — 路径配置、推理模式（CPU/GPU/自动）、缓存清理、更新、硬件信息、主题切换、授权管理
@@ -69,7 +69,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 模型首次使用时下载，存储路径可由用户自定义
 - GPU 加速通过 CUDA 11.8 实现，可选（无 GPU 时回退到 CPU 推理）
 - 最低配置：i5 CPU、8GB 内存、5GB 磁盘空间；推荐配置：i7+、16GB 内存、NVIDIA 显卡（显存 ≥ 4GB）
-- 默认视频输出分辨率 1080P，不可修改（保证口型同步质量）
+- 默认视频输出分辨率 1080P，可切换 720P（spec V1.3 FR-041）
 - 批量任务严格串行执行（内存/显存限制，不支持并行推理）
 
 ## 项目目录结构
@@ -163,7 +163,7 @@ specs/001-ai-dubber-desktop/         # 设计文档
 ### SQLite 核心表
 
 - **`works`** — 已生成视频记录（id, name, file_path, thumbnail_path, duration_seconds, resolution, aspect_ratio, file_size_bytes, created_at, project_config_id FK, is_trial_watermark）
-- **`project_configs`** — 制作配置快照，用于「重新编辑」（script, voice_id, voice_speed/volume/emotion, digital_human_id, background_type/value, aspect_ratio, subtitle_enabled/config JSON, bgm 相关字段）
+- **`project_configs`** — 制作配置快照，用于「重新编辑」（script, voice_id, voice_speed/volume/style, digital_human_id, background_type/value, aspect_ratio, subtitle_enabled/config JSON, bgm 相关字段）
 - **`digital_humans`** — 数字人（name, category, source[official/custom], thumbnail_path, preview_video_path, adapted_video_path, adaptation_status[ready/processing/failed/pending], is_favorited）
 - **`voice_models`** — 音色（name, category[male/female/emotional/dialect], model_size_mb, download_status[not_downloaded/downloading/downloaded/error], model_path, download_url, is_emotional, is_favorited）
 - **`bgm_tracks`** — BGM（name, category[upbeat/soothing/grand], source[builtin/custom], file_path）
